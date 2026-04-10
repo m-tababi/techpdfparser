@@ -149,6 +149,8 @@ class TestStructuredPipeline:
             object_id="fig0", doc_id=doc_meta.doc_id, source_file="test.pdf",
             page_number=0, tool_name="mock", tool_version="0.0",
             image_path="/out/fig.png", caption="A chart",
+            # description pre-set so _enrich_figures skips file I/O in this test
+            description="A chart",
         )
 
         parser = MagicMock()
@@ -180,3 +182,112 @@ class TestStructuredPipeline:
         index_writer.upsert_tables.assert_called_once()
         index_writer.upsert_formulas.assert_called_once()
         index_writer.upsert_figures.assert_called_once()
+
+    def test_figure_description_enrichment(self, tmp_path):
+        doc_meta = make_doc_meta(tmp_path)
+        storage = make_storage(tmp_path)
+
+        img_path = tmp_path / "fig.png"
+        img_path.write_bytes(b"fake-png")
+
+        figure = Figure(
+            object_id="fig0", doc_id=doc_meta.doc_id, source_file="test.pdf",
+            page_number=0, tool_name="mock", tool_version="0.0",
+            image_path=str(img_path),
+        )
+
+        parser = MagicMock()
+        parser.parse.return_value = ([], [], [figure])
+
+        figure_descriptor = MagicMock()
+        figure_descriptor.describe.return_value = "A bar chart"
+
+        embedder = MagicMock()
+        embedder.embedding_dim = 4
+        embedder.embed.return_value = [[0.1, 0.2, 0.3, 0.4]]
+
+        config = StructuredPipelineConfig(collections=StructuredCollectionsConfig())
+        pipeline = StructuredPipeline(
+            parser, MagicMock(), figure_descriptor, embedder, MagicMock(), storage, config
+        )
+
+        with patch("src.core.pipelines.structured.PILImage.open", return_value=MagicMock()):
+            _, _, figures = pipeline.run(Path(doc_meta.source_file), doc_meta)
+
+        assert figures[0].description == "A bar chart"
+        figure_descriptor.describe.assert_called_once()
+
+    def test_formula_enrichment_with_renderer(self, tmp_path):
+        doc_meta = make_doc_meta(tmp_path)
+        storage = make_storage(tmp_path)
+
+        from src.core.models.elements import BoundingBox
+        formula = Formula(
+            object_id="f0", doc_id=doc_meta.doc_id, source_file="test.pdf",
+            page_number=0, tool_name="mock", tool_version="0.0",
+            latex="", content="integral expression",
+            bbox=BoundingBox(x0=10, y0=20, x1=50, y1=40),
+        )
+
+        parser = MagicMock()
+        parser.parse.return_value = ([], [formula], [])
+
+        enriched = Formula(
+            object_id="f_enriched", doc_id=doc_meta.doc_id, source_file="test.pdf",
+            page_number=0, tool_name="ppformulanet", tool_version="0.0",
+            latex=r"\int_0^1 x\,dx", content=r"\int_0^1 x\,dx",
+        )
+        formula_extractor = MagicMock()
+        formula_extractor.extract.return_value = [enriched]
+
+        renderer = MagicMock()
+        page_img = MagicMock()
+        page_img.crop.return_value = MagicMock()
+        renderer.render_page.return_value = page_img
+
+        embedder = MagicMock()
+        embedder.embedding_dim = 4
+        embedder.embed.return_value = [[0.1, 0.2, 0.3, 0.4]]
+
+        config = StructuredPipelineConfig(collections=StructuredCollectionsConfig())
+        pipeline = StructuredPipeline(
+            parser, formula_extractor, MagicMock(), embedder, MagicMock(), storage, config,
+            renderer=renderer,
+        )
+
+        _, formulas, _ = pipeline.run(Path(doc_meta.source_file), doc_meta)
+
+        renderer.render_page.assert_called_once()
+        formula_extractor.extract.assert_called_once()
+        assert formulas[0].latex == r"\int_0^1 x\,dx"
+
+    def test_formula_enrichment_skipped_without_renderer(self, tmp_path):
+        doc_meta = make_doc_meta(tmp_path)
+        storage = make_storage(tmp_path)
+
+        from src.core.models.elements import BoundingBox
+        formula = Formula(
+            object_id="f0", doc_id=doc_meta.doc_id, source_file="test.pdf",
+            page_number=0, tool_name="mock", tool_version="0.0",
+            latex="", content="some formula",
+            bbox=BoundingBox(x0=10, y0=20, x1=50, y1=40),
+        )
+
+        parser = MagicMock()
+        parser.parse.return_value = ([], [formula], [])
+
+        formula_extractor = MagicMock()
+
+        embedder = MagicMock()
+        embedder.embedding_dim = 4
+        embedder.embed.return_value = [[0.1, 0.2, 0.3, 0.4]]
+
+        config = StructuredPipelineConfig(collections=StructuredCollectionsConfig())
+        # renderer=None (default) → enrichment must be skipped
+        pipeline = StructuredPipeline(
+            parser, formula_extractor, MagicMock(), embedder, MagicMock(), storage, config
+        )
+
+        pipeline.run(Path(doc_meta.source_file), doc_meta)
+
+        formula_extractor.extract.assert_not_called()

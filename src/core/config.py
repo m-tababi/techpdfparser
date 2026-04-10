@@ -48,11 +48,17 @@ class PipelinesConfig(BaseModel):
     structured: StructuredPipelineConfig = Field(default_factory=StructuredPipelineConfig)
 
 
+class RetrievalConfig(BaseModel):
+    retrieval_engine: str = "qdrant"
+    fusion_engine: str = "rrf"
+
+
 class AppConfig(BaseModel):
     """Root config object. Load via `load_config()` or use `default_config()`."""
 
     storage: StorageConfig = Field(default_factory=StorageConfig)
     pipelines: PipelinesConfig = Field(default_factory=PipelinesConfig)
+    retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     # Per-adapter settings keyed by adapter name (e.g. "colqwen25", "qdrant")
     adapters: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
