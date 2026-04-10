@@ -3,12 +3,15 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from PIL import Image as PILImage
+
 from ..config import StructuredPipelineConfig
 from ..interfaces.embedder import TextEmbedder
 from ..interfaces.figure import FigureDescriptor
 from ..interfaces.formula import FormulaExtractor
 from ..interfaces.indexer import IndexWriter
 from ..interfaces.parser import StructuredParser
+from ..interfaces.renderer import PageRenderer
 from ..models.document import DocumentMeta
 from ..models.elements import Figure, Formula, Table
 from ...utils.storage import StorageManager
@@ -34,6 +37,7 @@ class StructuredPipeline:
         index_writer: IndexWriter,
         storage: StorageManager,
         config: StructuredPipelineConfig,
+        renderer: PageRenderer | None = None,
     ) -> None:
         self.parser = parser
         self.formula_extractor = formula_extractor
@@ -42,6 +46,8 @@ class StructuredPipeline:
         self.index_writer = index_writer
         self.storage = storage
         self.config = config
+        # Optional: needed only for formula image cropping (PP-FormulaNet standalone)
+        self.renderer = renderer
 
     def run(
         self, pdf_path: Path, doc_meta: DocumentMeta
@@ -60,6 +66,9 @@ class StructuredPipeline:
             f"{len(figures)} figures in {t.elapsed_seconds:.2f}s"
         )
 
+        formulas = self._enrich_formulas(formulas, pdf_path)
+        figures = self._enrich_figures(figures)
+
         tables = self._embed_tables(tables)
         formulas = self._embed_formulas(formulas)
         figures = self._embed_figures(figures)
@@ -69,6 +78,35 @@ class StructuredPipeline:
         self.index_writer.upsert_figures(cols.figures, figures)
 
         return tables, formulas, figures
+
+    def _enrich_figures(self, figures: list[Figure]) -> list[Figure]:
+        """Run VLM description on figures that have an image but no description yet."""
+        for fig in figures:
+            if fig.description is None and fig.image_path:
+                img = PILImage.open(fig.image_path)
+                fig.description = self.figure_descriptor.describe(img)
+        return figures
+
+    def _enrich_formulas(self, formulas: list[Formula], pdf_path: Path) -> list[Formula]:
+        """Crop formula regions and run PP-FormulaNet to get LaTeX for bbox-only formulas.
+
+        Skipped entirely when no renderer is provided (e.g. MinerU already supplied LaTeX).
+        """
+        if self.renderer is None:
+            return formulas
+        for formula in formulas:
+            if formula.latex or formula.bbox is None:
+                continue
+            page_img = self.renderer.render_page(pdf_path, formula.page_number)
+            bb = formula.bbox
+            crop = page_img.crop((int(bb.x0), int(bb.y0), int(bb.x1), int(bb.y1)))
+            results = self.formula_extractor.extract(
+                crop, doc_id=formula.doc_id, page_number=formula.page_number
+            )
+            if results:
+                formula.latex = results[0].latex
+                formula.content = results[0].content or results[0].latex
+        return formulas
 
     def _embed_tables(self, tables: list[Table]) -> list[Table]:
         if not tables:
