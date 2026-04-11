@@ -93,3 +93,23 @@ class StorageManager:
             data["runs"].append(entry)
 
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def latest_text_sections(self, doc_id: str) -> Path | None:
+        """Return path to sections.json from the most recent text run, or None.
+
+        The structured pipeline calls this to link Tables/Figures/Formulas to
+        the section tree produced by the text pipeline.
+        """
+        index_path = self.document_json_path(doc_id)
+        if not index_path.exists():
+            return None
+
+        data = json.loads(index_path.read_text(encoding="utf-8"))
+        text_runs = [r for r in data.get("runs", []) if r.get("pipeline") == "text"]
+        if not text_runs:
+            return None
+
+        # document.json appends in chronological order; last = most recent
+        latest_run_id = text_runs[-1]["run_id"]
+        sections_path = self.doc_dir(doc_id) / "runs" / latest_run_id / "sections.json"
+        return sections_path if sections_path.exists() else None

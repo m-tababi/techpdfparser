@@ -17,6 +17,7 @@ from ..models.document import DocumentMeta
 from ..models.elements import Figure, Formula, Table
 from ...utils.jsonl import write_jsonl
 from ...utils.manifest import ManifestBuilder
+from ...utils.sections import SectionMarker, assign_sections, load_sections
 from ...utils.storage import StorageManager
 from ...utils.timing import timed
 
@@ -89,6 +90,17 @@ class StructuredPipeline:
         # Move figure images from parser's tempdir into the run directory
         figures = self._persist_figures(figures, run_dir)
 
+        # Attach section context from the most recent text run (if available)
+        sections_path = self.storage.latest_text_sections(doc_meta.doc_id)
+        section_source: str | None = None
+        if sections_path is not None:
+            markers = load_sections(sections_path)
+            all_elements: list = [*tables, *formulas, *figures]
+            assign_sections(all_elements, markers)
+            # Record which text run provided section data for traceability
+            section_source = sections_path.parent.name
+            logger.info(f"Linked sections from {section_source}")
+
         formulas = self._enrich_formulas(formulas, pdf_path)
         figures = self._enrich_figures(figures)
 
@@ -100,7 +112,7 @@ class StructuredPipeline:
         self.index_writer.upsert_formulas(cols.formulas, formulas)
         self.index_writer.upsert_figures(cols.figures, figures)
 
-        self._write_outputs(run_dir, tables, formulas, figures, manifest)
+        self._write_outputs(run_dir, tables, formulas, figures, manifest, section_source)
         self.storage.update_document_index(
             doc_meta.doc_id, str(pdf_path), run_id, "structured"
         )
@@ -191,6 +203,7 @@ class StructuredPipeline:
         formulas: list[Formula],
         figures: list[Figure],
         manifest: ManifestBuilder,
+        section_source: str | None = None,
     ) -> None:
         write_jsonl(run_dir / "tables.jsonl", tables)
         write_jsonl(run_dir / "formulas.jsonl", formulas)
@@ -203,4 +216,6 @@ class StructuredPipeline:
             f"{cols.tables},{cols.formulas},{cols.figures}",
             len(tables) + len(formulas) + len(figures),
         )
+        if section_source is not None:
+            manifest.config["section_source"] = section_source
         manifest.write(run_dir)

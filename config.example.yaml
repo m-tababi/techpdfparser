@@ -17,10 +17,11 @@ pipelines:
     dpi: 150
 
   text:
-    # Swap extractor: "olmocr2" | "pymupdf_text" | "docling_text"
-    # AMD/CPU alternative: "pymupdf_text"  (native text layer, no model, no CUDA)
+    # Swap extractor: "olmocr2" | "pymupdf_text" | "pymupdf_structured" | "docling_text"
+    # AMD/CPU alternative: "pymupdf_structured"  (font-aware, section detection, no CUDA)
     extractor: "olmocr2"
-    # Swap chunker: "fixed_size" | "sentence" | "semantic"
+    # Swap chunker: "fixed_size" | "section_aware"
+    # "section_aware" never splits across headings; requires pymupdf_structured extractor
     chunker: "fixed_size"
     # Swap embedder: "bge_m3" | "e5_large" | "gte_qwen2" | "minilm"
     # AMD/CPU alternative: "minilm"  (384-dim, CPU-native via sentence-transformers)
@@ -86,6 +87,14 @@ adapters:
     device: "cpu"           # set to "directml" if torch-directml is installed
 
   pymupdf_text: {}          # no configurable parameters
+
+  pymupdf_structured:
+    heading_size_ratio: 1.3   # spans >= ratio * median font size are treated as headings
+    max_heading_levels: 4     # maximum number of distinct heading levels to detect
+
+  section_aware:
+    chunk_size: 512
+    chunk_overlap: 64
 
   minilm:
     model_name: "all-MiniLM-L6-v2"

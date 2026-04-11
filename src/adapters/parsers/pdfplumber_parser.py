@@ -96,6 +96,9 @@ class PdfPlumberParser:
         lines.extend(" | ".join(row) for row in rows[1:])
         return "\n".join(lines)
 
+    # Caption prefixes in multiple languages — extend as needed
+    _CAPTION_PREFIXES = ("figure", "fig.", "abbildung", "abb.")
+
     def _extract_figures(self, pdf_path: Path, doc_id: str) -> list[Figure]:
         try:
             import fitz
@@ -107,6 +110,7 @@ class PdfPlumberParser:
         try:
             tmp_dir = Path(tempfile.mkdtemp(prefix="techpdf_figures_"))
             for page_number, page in enumerate(doc):
+                text_blocks = page.get_text("blocks")
                 for seq, img_info in enumerate(page.get_images(full=True)):
                     xref = img_info[0]
                     img_data = doc.extract_image(xref)
@@ -114,14 +118,29 @@ class PdfPlumberParser:
                         continue
                     img_path = tmp_dir / f"{doc_id}_p{page_number}_f{seq}.png"
                     img_path.write_bytes(img_data["image"])
+                    caption = self._find_caption(img_info, text_blocks)
                     figures.append(
                         self._image_to_figure(
-                            img_path, doc_id, page_number, str(pdf_path), seq
+                            img_path, doc_id, page_number, str(pdf_path), seq, caption
                         )
                     )
         finally:
             doc.close()
         return figures
+
+    def _find_caption(self, img_info: tuple, text_blocks: list) -> str | None:
+        """Search nearby text blocks for a caption line.
+
+        Looks for blocks whose text starts with a known caption prefix.
+        Returns the first match or None when nothing is found.
+        """
+        for block in text_blocks:
+            if block[6] != 0:  # skip non-text blocks
+                continue
+            text = block[4].strip()
+            if text.lower().startswith(self._CAPTION_PREFIXES):
+                return text
+        return None
 
     def _image_to_figure(
         self,
@@ -130,6 +149,7 @@ class PdfPlumberParser:
         page_number: int,
         source_file: str,
         seq: int,
+        caption: str | None = None,
     ) -> Figure:
         return Figure(
             object_id=generate_element_id(
@@ -141,4 +161,5 @@ class PdfPlumberParser:
             tool_name=self.TOOL_NAME,
             tool_version=self.TOOL_VERSION,
             image_path=str(img_path),
+            caption=caption,
         )
