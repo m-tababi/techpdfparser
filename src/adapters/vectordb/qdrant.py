@@ -11,11 +11,25 @@ def _connect(host: str, port: int):
     try:
         from qdrant_client import QdrantClient
 
+        # Use ":memory:" as host to get a local in-memory instance — useful
+        # for testing without a running Qdrant server.
+        if host == ":memory:":
+            return QdrantClient(location=":memory:")
         return QdrantClient(host=host, port=port)
     except ImportError:
         raise ImportError(
             "qdrant-client not installed. Run: pip install qdrant-client"
         )
+
+
+def _to_point_id(hex_id: str) -> str:
+    """Convert a 16-char hex element ID to a valid UUID string.
+
+    Qdrant's in-memory client requires proper UUIDs; the remote server accepts
+    arbitrary strings. Padding the 64-bit hex to 128 bits keeps IDs deterministic.
+    """
+    import uuid
+    return str(uuid.UUID(hex=hex_id.ljust(32, "0")))
 
 
 def _base_payload(element: Any) -> dict:
@@ -93,7 +107,7 @@ class QdrantIndexWriter:
 
         points = [
             PointStruct(
-                id=page.object_id,
+                id=_to_point_id(page.object_id),
                 vector=page.embedding,  # list[list[float]] for multi-vector
                 payload={**_base_payload(page), "image_path": page.image_path},
             )
@@ -109,7 +123,7 @@ class QdrantIndexWriter:
 
         points = [
             PointStruct(
-                id=chunk.object_id,
+                id=_to_point_id(chunk.object_id),
                 vector=chunk.embedding,
                 payload={**_base_payload(chunk), "content": chunk.content},
             )
@@ -125,7 +139,7 @@ class QdrantIndexWriter:
 
         points = [
             PointStruct(
-                id=t.object_id,
+                id=_to_point_id(t.object_id),
                 vector=t.embedding,
                 payload={**_base_payload(t), "content": t.content},
             )
@@ -141,7 +155,7 @@ class QdrantIndexWriter:
 
         points = [
             PointStruct(
-                id=f.object_id,
+                id=_to_point_id(f.object_id),
                 vector=f.embedding,
                 payload={**_base_payload(f), "latex": f.latex, "content": f.content},
             )
@@ -157,7 +171,7 @@ class QdrantIndexWriter:
 
         points = [
             PointStruct(
-                id=fig.object_id,
+                id=_to_point_id(fig.object_id),
                 vector=fig.embedding,
                 payload={
                     **_base_payload(fig),
