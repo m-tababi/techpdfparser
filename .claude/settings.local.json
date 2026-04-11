@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -c \"from src.core.retrieval import UnifiedRetriever; print\\('ok'\\)\")",
+      "Bash(python -c \"from src.adapters.fusion.score_norm import MinMaxScoreNormFusion; print\\('ok'\\)\")",
+      "Bash(python -m techpdfparser --help)",
+      "Bash(python -m src --help)",
+      "WebSearch",
+      "Bash(xargs grep:*)",
+      "Bash(git -C D:/PDF_Parsing status --short)",
+      "Bash(ls *.md)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python -m pytest tests/ -x -q)",
+      "Bash(python:*)",
+      "Bash(pip list:*)",
+      "Bash(ls D:/PDF_Parsing/config*.yaml)"
+    ]
+  }
+}

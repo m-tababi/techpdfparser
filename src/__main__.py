@@ -109,6 +109,9 @@ def _run_ingest(pdf_path: Path, cfg: AppConfig) -> None:
     tables, formulas, figures = structured_pipeline.run(pdf_path, doc_meta)
     print(f"  Structured: {len(tables)} tables, {len(formulas)} formulas, {len(figures)} figures indexed")
 
+    doc_dir = storage.doc_dir(doc_meta.doc_id)
+    print(f"\n  Outputs: {doc_dir}")
+
 
 def main() -> None:
     args = _parse_args()

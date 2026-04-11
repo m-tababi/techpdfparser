@@ -10,6 +10,8 @@ from ..interfaces.extractor import TextExtractor
 from ..interfaces.indexer import IndexWriter
 from ..models.document import DocumentMeta
 from ..models.elements import TextChunk
+from ...utils.jsonl import write_jsonl
+from ...utils.manifest import ManifestBuilder
 from ...utils.storage import StorageManager
 from ...utils.timing import timed
 
@@ -41,7 +43,21 @@ class TextPipeline:
 
     def run(self, pdf_path: Path, doc_meta: DocumentMeta) -> list[TextChunk]:
         """Run the full text pipeline for one document."""
-        logger.info(f"Text pipeline start | doc={doc_meta.doc_id}")
+        tool_suffix = f"{self.extractor.tool_name}_{self.embedder.tool_name}"
+        run_dir = self.storage.run_dir(doc_meta.doc_id, "text", tool_suffix)
+        run_id = self.storage.run_id_from_dir(run_dir)
+        manifest = ManifestBuilder(
+            run_id=run_id,
+            pipeline="text",
+            doc_id=doc_meta.doc_id,
+            source_file=str(pdf_path),
+            tools={
+                "extractor": self.config.extractor,
+                "chunker": self.config.chunker,
+                "embedder": self.config.embedder,
+            },
+        )
+        logger.info(f"Text pipeline start | doc={doc_meta.doc_id} | run={run_id}")
 
         self.index_writer.ensure_collection(
             self.config.collection, self.embedder.embedding_dim
@@ -50,6 +66,9 @@ class TextPipeline:
         with timed("extract") as t:
             raw_blocks = self.extractor.extract_all(pdf_path, doc_meta.doc_id)
         logger.info(f"Extracted {len(raw_blocks)} blocks in {t.elapsed_seconds:.2f}s")
+
+        # Persist raw extractor output before chunking
+        write_jsonl(run_dir / "raw_blocks.jsonl", raw_blocks)
 
         chunks = self.chunker.chunk(raw_blocks)
         logger.info(f"Chunked into {len(chunks)} chunks")
@@ -62,6 +81,11 @@ class TextPipeline:
             self.index_writer.upsert_text(self.config.collection, chunks)
         logger.info(f"Indexed {len(chunks)} chunks in {t.elapsed_seconds:.2f}s")
 
+        self._write_outputs(run_dir, raw_blocks, chunks, manifest)
+        self.storage.update_document_index(
+            doc_meta.doc_id, str(pdf_path), run_id, "text"
+        )
+
         return chunks
 
     def _embed(self, chunks: list[TextChunk]) -> list[TextChunk]:
@@ -70,3 +94,17 @@ class TextPipeline:
         for chunk, embedding in zip(chunks, embeddings):
             chunk.embedding = embedding
         return chunks
+
+    def _write_outputs(
+        self,
+        run_dir: Path,
+        raw_blocks: list[TextChunk],
+        chunks: list[TextChunk],
+        manifest: ManifestBuilder,
+    ) -> None:
+        # raw_blocks.jsonl already written before chunking; write chunks now
+        write_jsonl(run_dir / "chunks.jsonl", chunks)
+        manifest.set_tool_version(self.extractor.tool_name, self.extractor.tool_version)
+        manifest.set_counts(raw_blocks=len(raw_blocks), chunks=len(chunks))
+        manifest.set_qdrant_info(self.config.collection, len(chunks))
+        manifest.write(run_dir)

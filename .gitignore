@@ -63,3 +63,10 @@ logs/
 # Local data / output
 data/
 output/
+outputs/
+
+# Local config (copy of config.example.yaml)
+config.yaml
+
+# Test PDFs
+*.pdf
