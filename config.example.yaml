@@ -11,27 +11,33 @@ pipelines:
     # Swap renderer: "pymupdf" | "pdf2image" | "pypdfium2"
     renderer: "pymupdf"
     # Swap embedder: "colqwen25" | "colpali" | "clip"
+    # AMD/CPU alternative: "clip"  (512-dim, single-vector, no CUDA required)
     embedder: "colqwen25"
     collection: "visual_pages"
     dpi: 150
 
   text:
     # Swap extractor: "olmocr2" | "pymupdf_text" | "docling_text"
+    # AMD/CPU alternative: "pymupdf_text"  (native text layer, no model, no CUDA)
     extractor: "olmocr2"
     # Swap chunker: "fixed_size" | "sentence" | "semantic"
     chunker: "fixed_size"
-    # Swap embedder: "bge_m3" | "e5_large" | "gte_qwen2"
+    # Swap embedder: "bge_m3" | "e5_large" | "gte_qwen2" | "minilm"
+    # AMD/CPU alternative: "minilm"  (384-dim, CPU-native via sentence-transformers)
     embedder: "bge_m3"
     collection: "text_chunks"
     chunk_size: 512
     chunk_overlap: 64
 
   structured:
-    # Swap parser: "mineru25" | "docling" | "unstructured"
+    # Swap parser: "mineru25" | "docling" | "unstructured" | "pdfplumber"
+    # AMD/CPU alternative: "pdfplumber"  (tables + figures only, no formula ML, no CUDA)
     parser: "mineru25"
     # Swap formula extractor: "ppformulanet" | "pix2tex" | "unimernet"
+    # AMD/CPU alternative: "pix2tex"  (CPU ViT ~400MB, LaTeX output)
     formula_extractor: "ppformulanet"
-    # Swap figure descriptor: "qwen25vl" | "llava" | "internvl"
+    # Swap figure descriptor: "qwen25vl" | "llava" | "internvl" | "moondream"
+    # AMD/CPU alternative: "moondream"  (~2B params, CPU-viable for testing)
     figure_descriptor: "qwen25vl"
     collections:
       tables: "tables"
@@ -73,3 +79,25 @@ adapters:
     host: "localhost"
     port: 6333
     collection_prefix: ""   # set to "dev_" to namespace collections in shared DB
+
+  # AMD / CPU-fallback adapters
+  clip:
+    model_name: "openai/clip-vit-base-patch32"
+    device: "cpu"           # set to "directml" if torch-directml is installed
+
+  pymupdf_text: {}          # no configurable parameters
+
+  minilm:
+    model_name: "all-MiniLM-L6-v2"
+    device: "cpu"
+    batch_size: 64
+
+  pdfplumber: {}            # no configurable parameters
+
+  pix2tex:
+    device: "cpu"
+
+  moondream:
+    model_name: "vikhyatk/moondream2"
+    revision: "2025-01-09"
+    device: "cpu"
