@@ -107,6 +107,8 @@ class TestTextPipeline:
         chunked = raw_blocks  # chunker returns same blocks in this mock
 
         extractor = MagicMock()
+        extractor.tool_name = "mock_extractor"
+        extractor.tool_version = "0.0"
         extractor.extract_all.return_value = raw_blocks
 
         chunker = MagicMock()
@@ -114,6 +116,7 @@ class TestTextPipeline:
 
         embedder = MagicMock()
         embedder.tool_name = "mock_embedder"
+        embedder.tool_version = "0.0"
         embedder.embedding_dim = 4
         embedder.embed.return_value = [[0.1, 0.2, 0.3, 0.4]] * len(chunked)
 

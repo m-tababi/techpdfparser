@@ -86,7 +86,10 @@ class CLIPEmbedder:
 
         inputs = self._processor(images=image, return_tensors="pt").to(self._device)
         with torch.no_grad():
-            features = self._model.get_image_features(**inputs)
+            # Call vision model directly — avoids transformers version differences
+            # where get_image_features() returns BaseModelOutputWithPooling instead of a tensor.
+            vision_out = self._model.vision_model(pixel_values=inputs["pixel_values"])
+            features = self._model.visual_projection(vision_out.pooler_output)
             features = features / features.norm(dim=-1, keepdim=True)
         return features[0].cpu().float().tolist()
 
@@ -97,6 +100,11 @@ class CLIPEmbedder:
             self._device
         )
         with torch.no_grad():
-            features = self._model.get_text_features(**inputs)
+            # Same approach: call text model directly for version robustness.
+            text_out = self._model.text_model(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs.get("attention_mask"),
+            )
+            features = self._model.text_projection(text_out.pooler_output)
             features = features / features.norm(dim=-1, keepdim=True)
         return features[0].cpu().float().tolist()
