@@ -102,6 +102,18 @@ class CLIPEmbedder:
         self._load()
         return [self._encode_text(query)]
 
+    @staticmethod
+    def _to_tensor(output: object) -> "torch.Tensor":
+        import torch
+
+        if isinstance(output, torch.Tensor):
+            return output
+        if hasattr(output, "pooler_output"):
+            return output.pooler_output
+        if isinstance(output, (tuple, list)):
+            return output[0]
+        raise TypeError(f"Unexpected CLIP output type: {type(output)}")
+
     def _encode_image(self, image: Image) -> list[float]:
         import torch
 
@@ -109,7 +121,9 @@ class CLIPEmbedder:
         with torch.no_grad():
             get_image_features = getattr(self._model, "get_image_features", None)
             if callable(get_image_features):
-                features = get_image_features(pixel_values=inputs["pixel_values"])
+                features = self._to_tensor(
+                    get_image_features(pixel_values=inputs["pixel_values"])
+                )
             else:
                 vision_out = self._model.vision_model(pixel_values=inputs["pixel_values"])
                 features = self._model.visual_projection(vision_out.pooler_output)
@@ -125,9 +139,11 @@ class CLIPEmbedder:
         with torch.no_grad():
             get_text_features = getattr(self._model, "get_text_features", None)
             if callable(get_text_features):
-                features = get_text_features(
-                    input_ids=inputs["input_ids"],
-                    attention_mask=inputs.get("attention_mask"),
+                features = self._to_tensor(
+                    get_text_features(
+                        input_ids=inputs["input_ids"],
+                        attention_mask=inputs.get("attention_mask"),
+                    )
                 )
             else:
                 text_out = self._model.text_model(

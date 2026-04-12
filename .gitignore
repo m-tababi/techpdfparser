@@ -72,3 +72,5 @@ config.yaml
 
 # Test PDFs
 *.pdf
+
+.claude/
