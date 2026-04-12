@@ -12,6 +12,7 @@ from ..models.document import DocumentMeta
 from ..models.elements import TextChunk
 from ...utils.jsonl import write_jsonl
 from ...utils.manifest import ManifestBuilder
+from ...utils.sections import write_sections
 from ...utils.storage import StorageManager
 from ...utils.timing import timed
 
@@ -69,6 +70,13 @@ class TextPipeline:
 
         # Persist raw extractor output before chunking
         write_jsonl(run_dir / "raw_blocks.jsonl", raw_blocks)
+
+        # Write section markers when the extractor supports it (pymupdf_structured)
+        if hasattr(self.extractor, "get_markers"):
+            markers = self.extractor.get_markers(pdf_path)
+            if markers:
+                write_sections(run_dir / "sections.json", markers)
+                logger.info(f"Wrote {len(markers)} section markers")
 
         chunks = self.chunker.chunk(raw_blocks)
         logger.info(f"Chunked into {len(chunks)} chunks")

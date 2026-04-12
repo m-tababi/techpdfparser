@@ -27,6 +27,10 @@ class BaseElement(BaseModel):
     raw_output_path: str | None = None
     parent_id: str | None = None
     child_ids: list[str] = Field(default_factory=list)
+    # Section context — set by pymupdf_structured extractor; None for visual pages
+    section_title: str | None = None
+    section_path: list[str] = Field(default_factory=list)
+    heading_level: int | None = None  # 1-based; only set on Heading elements
 
 
 class VisualPage(BaseElement):
@@ -66,7 +70,7 @@ class Formula(BaseElement):
     """A mathematical formula preserved in LaTeX when possible."""
 
     object_type: Literal["formula"] = "formula"
-    latex: str
+    latex: str = ""  # empty when parser found region but couldn't extract LaTeX
     content: str  # plain-text fallback for display
     image_path: str | None = None
     embedding: list[float] | None = None

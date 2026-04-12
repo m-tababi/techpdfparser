@@ -1,4 +1,4 @@
-"""CLI entrypoint: python -m techpdfparser ingest <pdf> [--config config.yaml]"""
+"""CLI entrypoint: python -m src ingest <pdf> [--config config.yaml]"""
 from __future__ import annotations
 
 import argparse
@@ -28,7 +28,7 @@ from src.utils.storage import StorageManager
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="techpdfparser")
+    parser = argparse.ArgumentParser(prog="src")
     sub = parser.add_subparsers(dest="command")
 
     ingest = sub.add_parser("ingest", help="Ingest a PDF into all three pipelines")
@@ -117,7 +117,7 @@ def main() -> None:
     args = _parse_args()
 
     if args.command is None:
-        print("Usage: python -m techpdfparser ingest <pdf> [--config config.yaml]")
+        print("Usage: python -m src ingest <pdf> [--config config.yaml]")
         sys.exit(1)
 
     cfg = _load_cfg(args.config)

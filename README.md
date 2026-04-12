@@ -70,36 +70,86 @@ config.example.yaml    # Annotated reference config
 
 ## Setup
 
-### Prerequisites
+**Prerequisites:** Python 3.10+, Qdrant (`docker run -p 6333:6333 qdrant/qdrant`)
 
-- Python 3.10+
-- Qdrant running locally (`docker run -p 6333:6333 qdrant/qdrant`)
-
-### NVIDIA GPU (CUDA)
+### Mac (Apple Silicon — M1/M2/M3/M4)
 
 ```bash
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements.txt -r requirements-gpu.txt
-```
-
-### AMD GPU / CPU (no CUDA)
-
-Uses lighter fallback adapters: `pymupdf_text` instead of olmOCR2, `minilm` instead of BGE-M3, `clip` instead of ColQwen2.5, `pdfplumber` instead of MinerU, `pix2tex` (CPU ViT) for formulas, `moondream` (~2B, CPU-viable) for figures.
-
-```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt -r requirements-amd.txt
+pip install --upgrade pip
+pip install torch
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
+pip install -e .
 ```
 
-### Dev / testing (no GPU)
+### Mac (Intel)
 
 ```bash
-pip install -r requirements-dev.txt
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
+pip install -e .
 ```
+
+### Linux / Ubuntu — CPU only (Server ohne GPU)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
+pip install -e .
+```
+
+### Linux / Ubuntu — NVIDIA GPU
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-gpu.txt
+pip install -e .
+```
+
+### Linux / Ubuntu — AMD GPU (ROCm)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
+pip install -e .
+```
+
+### Windows — NVIDIA GPU
+
+```powershell
+python -m venv venv
+venv\Scripts\activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-gpu.txt
+pip install -e .
+```
+
+### Windows — CPU only
+
+```powershell
+python -m venv venv
+venv\Scripts\activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
+pip install -e .
+```
+
+> `torch` wird immer separat installiert weil PyPI kein universelles Wheel für alle Hardware-Varianten liefert.
 
 ## Configuration
 
@@ -136,8 +186,8 @@ See `config.example.yaml` for all options with inline comments.
 ### Ingest a PDF
 
 ```bash
-python -m techpdfparser ingest path/to/document.pdf
-python -m techpdfparser ingest path/to/document.pdf --config config.yaml
+python -m src ingest path/to/document.pdf
+python -m src ingest path/to/document.pdf --config config.yaml
 ```
 
 Output:
