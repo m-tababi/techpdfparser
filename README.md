@@ -1,89 +1,49 @@
 # techpdfparser
 
-A local-first, multi-pipeline system for extracting and indexing technical PDFs into a vector database. Three independent pipelines handle visual pages, text chunks, and structured elements (tables, formulas, figures). Every tool is swappable via config — no code changes needed.
+Local-first PDF-Ingest für technische Dokumente mit modularen Pipelines, austauschbaren Embeddings und austauschbarer Vector-DB-Anbindung. Das System priorisiert Robustheit und Nachvollziehbarkeit: Konfigurationsfehler werden früh validiert, bestehende Collections werden gegen ihr Schema geprüft, und Modell-/Backend-Wechsel erzeugen standardmäßig einen neuen Namespace statt still dieselben Daten weiterzuverwenden.
 
-## Architecture
+## Überblick
 
-```
+```text
 PDF
- ├── Visual Pipeline     PyMuPDF → ColQwen2.5 (multi-vector)    → Qdrant: visual_pages
- ├── Text Pipeline       olmOCR2 → FixedSizeChunker → BGE-M3    → Qdrant: text_chunks
- └── Structured Pipeline MinerU2.5 → PP-FormulaNet / Qwen2.5-VL → Qdrant: tables, formulas, figures
+ ├── Visual Pipeline     PyMuPDF -> Visual Embedder -> visual_pages
+ ├── Text Pipeline       Extractor -> Chunker -> Text Embedder -> text_chunks
+ └── Structured Pipeline Parser -> Enrichment -> Text Embedder -> tables/formulas/figures
 ```
 
-At query time, `UnifiedRetriever` hits all five collections in parallel and fuses results via Reciprocal Rank Fusion (RRF).
+Wichtige Laufzeitregeln:
 
-### Adapter registry
+- Adapter werden über die Registry und `config.yaml` gewählt, nicht im Pipeline-Code.
+- Collections werden intern aus `index_namespace + base_collection` aufgelöst.
+- `index_namespace: auto` erzeugt einen deterministischen Namespace aus Backend und Embedder-Signaturen.
+- `index_namespace: legacy` nutzt die alten, unnamespaced Collection-Namen.
+- Retrieval läuft bewusst sequentiell und robust, nicht parallel optimiert.
+- `section_aware` ist nur mit `pymupdf_structured` erlaubt.
 
-Every adapter self-registers on import:
+## Architektur
 
-```python
-@register_renderer("pymupdf")
-class PyMuPDFRenderer: ...
-```
+Die wichtigsten Bausteine:
 
-Pipelines look up by name: `get_renderer("pymupdf", **kwargs)`. Swapping a tool means changing one string in `config.yaml` — never touching existing adapters.
+- `src/core/config.py`: YAML -> Pydantic-Konfiguration inklusive Cross-Checks.
+- `src/core/indexing.py`: `VectorSchema`, `adapter_signature`, Namespace-Auflösung.
+- `src/core/pipelines/`: Visual-, Text- und Structured-Pipeline.
+- `src/adapters/`: konkrete Implementierungen für Renderer, Extractor, Embedder, Parser, Fusion und Vector-DB.
+- `src/adapters/vectordb/qdrant.py`: produktiver Backendpfad.
+- `src/adapters/vectordb/memory.py`: test-only Backend zum Verifizieren der Backend-Agnostik.
+- `src/utils/manifest.py`: Manifeste mit Backend, Namespace, Signaturen und Schema.
 
-### Dependency direction
-
-```
-utils → core/models → core/interfaces → core/pipelines → adapters
-```
-
-No upward imports. GPU models are lazy-loaded on first use.
-
-## Project Structure
-
-```
-src/
-  core/
-    config.py          # YAML → Pydantic AppConfig
-    registry.py        # Adapter registry & lookup
-    retrieval.py       # UnifiedRetriever (query all collections → RRF)
-    models/            # DocumentMeta, ExtractedElement subtypes, RetrievalResult
-    interfaces/        # Protocol definitions for every component
-    pipelines/         # VisualPipeline, TextPipeline, StructuredPipeline
-  adapters/
-    renderers/         # pymupdf
-    visual/            # colqwen25, clip
-    ocr/               # olmocr2, pymupdf_text
-    chunkers/          # fixed_size
-    embedders/         # bge_m3, minilm
-    parsers/           # mineru25, pdfplumber
-    formula/           # ppformulanet, pix2tex
-    figures/           # qwen25vl, moondream, noop
-    fusion/            # rrf, score_norm
-    vectordb/          # qdrant
-  utils/
-    ids.py             # Stable SHA256-based point IDs
-    storage.py         # Versioned output dirs
-    jsonl.py           # JSONL read/write helpers
-    manifest.py        # Per-run manifest files
-    timing.py          # Timing context manager
-    logging.py         # Structured logging
-tasks/
-  todo.md              # Roadmap with checkable items
-  lessons.md           # Post-mortems and lessons learned
-tests/
-config.example.yaml    # Annotated reference config
-```
+Mehr Kontext steht in [ARCHITECTURE.md](ARCHITECTURE.md) und [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).
 
 ## Setup
 
-**Prerequisites:** Python 3.10+, Qdrant (`docker run -p 6333:6333 qdrant/qdrant`)
+Voraussetzungen:
 
-### Mac (Apple Silicon — M1/M2/M3/M4)
+- Python 3.10+
+- Für produktives Retrieval typischerweise Qdrant, z. B. `docker run -p 6333:6333 qdrant/qdrant`
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install torch
-pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
-pip install -e .
-```
+Die Requirements behalten ihre bisherige Struktur, werden aber jetzt immer mit `constraints-common.txt` installiert, damit fragile Transitiv-Abhängigkeiten reproduzierbar bleiben.
 
-### Mac (Intel)
+### CPU / Apple Silicon / allgemeines lokales Setup
 
 ```bash
 python3 -m venv venv
@@ -94,18 +54,7 @@ pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
 pip install -e .
 ```
 
-### Linux / Ubuntu — CPU only (Server ohne GPU)
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
-pip install -e .
-```
-
-### Linux / Ubuntu — NVIDIA GPU
+### NVIDIA GPU
 
 ```bash
 python3 -m venv venv
@@ -116,138 +65,146 @@ pip install -r requirements.txt -r requirements-dev.txt -r requirements-gpu.txt
 pip install -e .
 ```
 
-### Linux / Ubuntu — AMD GPU (ROCm)
+Hinweis: Die `requirements*.txt` binden automatisch `constraints-common.txt` ein.
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
-pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
-pip install -e .
-```
-
-### Windows — NVIDIA GPU
-
-```powershell
-python -m venv venv
-venv\Scripts\activate
-pip install --upgrade pip
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements.txt -r requirements-dev.txt -r requirements-gpu.txt
-pip install -e .
-```
-
-### Windows — CPU only
-
-```powershell
-python -m venv venv
-venv\Scripts\activate
-pip install --upgrade pip
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt -r requirements-dev.txt -r requirements-amd.txt
-pip install -e .
-```
-
-> `torch` wird immer separat installiert weil PyPI kein universelles Wheel für alle Hardware-Varianten liefert.
-
-## Configuration
+## Konfiguration
 
 ```bash
 cp config.example.yaml config.yaml
-# Edit config.yaml — set Qdrant host, device, model paths, etc.
 ```
 
-Key config blocks:
+Zentrale Schalter:
 
 ```yaml
 pipelines:
   visual:
-    renderer: "pymupdf"     # swap to any registered renderer
-    embedder: "colqwen25"   # AMD: "clip"
+    embedder: "colqwen25"
   text:
-    extractor: "olmocr2"    # AMD: "pymupdf_text"
-    embedder: "bge_m3"      # AMD: "minilm"
+    extractor: "pymupdf_structured"
+    chunker: "section_aware"
+    embedder: "bge_m3"
   structured:
-    parser: "mineru25"      # AMD: "pdfplumber"
-    formula_extractor: "ppformulanet"   # AMD: "pix2tex"
-    figure_descriptor: "qwen25vl"       # AMD: "moondream"
+    parser: "mineru25"
 
-adapters:
-  qdrant:
-    host: "localhost"
-    port: 6333
+retrieval:
+  retrieval_engine: "qdrant"
+  fusion_engine: "rrf"
+  index_namespace: "auto"      # "auto" | "legacy" | eigener String
+  validate_on_start: true
+  fail_on_schema_mismatch: true
 ```
 
-See `config.example.yaml` for all options with inline comments.
+Namespace-Verhalten:
 
-## Usage
+- `auto`: neuer Namespace pro Backend-/Embedder-Kombination
+- `legacy`: bisherige Collection-Namen ohne Namespace
+- eigener String: stabiler, expliziter Namespace
 
-### Ingest a PDF
+Reindex-Modell:
+
+1. Config ändern
+2. `python -m src doctor --config config.yaml`
+3. PDF erneut mit `ingest` in den neuen Namespace schreiben
+
+Es gibt keine stille In-Place-Migration vorhandener Vektordaten.
+
+## Doctor
+
+`doctor` ist der Preflight für neue oder geänderte Setups.
 
 ```bash
-python -m src ingest path/to/document.pdf
+python -m src doctor --config config.yaml
+```
+
+Geprüft werden:
+
+- aktive Adapter und ihre Python-Imports
+- Config-Konsistenz
+- Backend-Erreichbarkeit
+- aufgelöster Namespace
+- bestehende Collection-Schemata gegen `VectorSchema`
+
+## Ingest
+
+```bash
 python -m src ingest path/to/document.pdf --config config.yaml
 ```
 
-Output:
+Die CLI zeigt dabei unter anderem den aufgelösten Namespace und die wichtigsten Collection-Namen an.
 
-```
-Ingesting document.pdf | doc_id=a3f1b2c4d5e6f7a8 | pages=42
-  Visual:     42 pages indexed
-  Text:       187 chunks indexed
-  Structured: 14 tables, 6 formulas, 9 figures indexed
+Die erzeugten Manifest-Dateien enthalten jetzt:
 
-  Outputs: outputs/a3f1b2c4d5e6f7a8/
-```
+- aktives Backend
+- Namespace
+- Adapter-Signaturen
+- validierte Vector-Schemata
 
-### Query (Python API)
+## Query API
+
+Wenn `index_namespace` nicht auf `legacy` steht, sollten Collection-Namen nicht mehr hart verdrahtet werden. Verwende stattdessen die Layout-Auflösung:
 
 ```python
+from src.core.config import load_config
+from src.core.indexing import resolve_index_layout
+from src.core.registry import (
+    get_fusion_engine,
+    get_retrieval_engine,
+    get_text_embedder,
+    get_visual_embedder,
+)
 from src.core.retrieval import UnifiedRetriever
 
+cfg = load_config("config.yaml")
+visual_embedder = get_visual_embedder(
+    cfg.pipelines.visual.embedder,
+    **cfg.adapters.get(cfg.pipelines.visual.embedder, {}),
+)
+text_embedder = get_text_embedder(
+    cfg.pipelines.text.embedder,
+    **cfg.adapters.get(cfg.pipelines.text.embedder, {}),
+)
+layout = resolve_index_layout(
+    cfg,
+    visual_embedder=visual_embedder,
+    text_embedder=text_embedder,
+)
+
 retriever = UnifiedRetriever(
-    retrieval_engine=qdrant_engine,
-    visual_embedder=colqwen_embedder,
-    text_embedder=bge_embedder,
-    fusion_engine=rrf_engine,
-    visual_collection="visual_pages",
-    text_collection="text_chunks",
-    tables_collection="tables",
-    formulas_collection="formulas",
-    figures_collection="figures",
+    retrieval_engine=get_retrieval_engine(
+        cfg.retrieval.retrieval_engine,
+        **cfg.adapters.get(cfg.retrieval.retrieval_engine, {}),
+    ),
+    visual_embedder=visual_embedder,
+    text_embedder=text_embedder,
+    fusion_engine=get_fusion_engine(
+        cfg.retrieval.fusion_engine,
+        **cfg.adapters.get(cfg.retrieval.fusion_engine, {}),
+    ),
+    visual_collection=layout.collections["visual"],
+    text_collection=layout.collections["text"],
+    tables_collection=layout.collections["tables"],
+    formulas_collection=layout.collections["formulas"],
+    figures_collection=layout.collections["figures"],
 )
 
 results = retriever.query("heat dissipation in multilayer PCBs", top_k=10)
 ```
 
-## Development
+## Entwicklung
 
 ```bash
-# Run all tests
-pytest
-
-# Single file
-pytest tests/test_chunker.py
-
-# Single test
-pytest tests/test_rrf.py::test_rrf_basic
-
-# Lint
-ruff check src tests
-
-# Type check
-mypy src
+pytest -q
+ruff check src
+mypy
 ```
 
-## ID Stability
+Die Quality-Gates sind jetzt bewusst auf den stabilen Kern zugeschnitten:
 
-Point IDs are deterministic: SHA256 of `doc_id:page:type:tool:seq` truncated to 16 hex chars. Re-ingesting the same PDF with the same config upserts identical IDs — safe for deduplication and incremental re-runs.
+- `ruff` fokussiert auf Import-/Fehlerklassen im Produktivcode.
+- `mypy` prüft den stabilen Kernbereich (`src/core`, `src/utils`, `src/adapters/chunkers`, `src/adapters/vectordb`, `src/__main__.py`) mit pragmatischen Regeln statt globalem `strict`.
 
-## Current Status
+## Aktueller Fokus
 
-| Phase | Status |
-|---|---|
-| Phase 1 — skeleton, all interfaces, all adapters, Qdrant, RRF, 48 tests | Complete |
-| Phase 2 — unified retrieval API, score normalization, CLI entrypoint | In progress |
-| Phase 3 — BenchmarkRunner, A/B comparison reports | Planned |
+- Qdrant ist der produktive Backendpfad.
+- `memory` dient als test-only Backend zum Nachweis der Modularität.
+- Robustheit und explizite Validierung haben Vorrang vor Geschwindigkeit.

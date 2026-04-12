@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import io
 import tempfile
 from pathlib import Path
 
-from ...core.models.document import BoundingBox
 from ...core.models.elements import Figure, Formula, Table
 from ...core.registry import register_structured_parser
 from ...utils.ids import generate_element_id

@@ -1,3 +1,5 @@
+-c constraints-common.txt
+
 # AMD GPU / CPU-fallback pipeline stack
 # Install on top of requirements.txt
 #

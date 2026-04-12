@@ -15,6 +15,12 @@ class FixedSizeChunker:
     """
 
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64) -> None:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be > 0")
+        if chunk_overlap < 0:
+            raise ValueError("chunk_overlap must be >= 0")
+        if chunk_overlap >= chunk_size:
+            raise ValueError("chunk_overlap must be smaller than chunk_size")
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
 

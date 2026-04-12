@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ...core.indexing import VectorSchema, build_adapter_signature
 from ...core.registry import register_visual_embedder
 
 if TYPE_CHECKING:
@@ -70,6 +71,26 @@ class ColQwen25Embedder:
     @property
     def is_multi_vector(self) -> bool:
         return True
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def vector_schema(self) -> VectorSchema:
+        return VectorSchema(
+            dim=self.embedding_dim,
+            distance="cosine",
+            multi_vector=self.is_multi_vector,
+        )
+
+    @property
+    def adapter_signature(self) -> str:
+        return build_adapter_signature(
+            tool_name=self.tool_name,
+            model_name=self.model_name,
+            schema=self.vector_schema,
+        )
 
     def embed_page(self, image: Image) -> list[list[float]]:
         """Embed a page image into N patch vectors (N depends on image size)."""

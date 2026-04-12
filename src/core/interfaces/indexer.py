@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from ..indexing import VectorSchema
 from ..models.elements import Figure, Formula, Table, TextChunk, VisualPage
 
 
@@ -13,9 +14,20 @@ class IndexWriter(Protocol):
     """
 
     def ensure_collection(
-        self, collection: str, dim: int, is_multi_vector: bool = False
+        self,
+        collection: str,
+        schema: VectorSchema,
+        fail_on_schema_mismatch: bool = True,
     ) -> None:
-        """Create the collection if it does not already exist. Idempotent."""
+        """Create the collection or validate the existing schema."""
+        ...
+
+    def get_collection_schema(self, collection: str) -> VectorSchema | None:
+        """Return the current schema or None when the collection does not exist."""
+        ...
+
+    def healthcheck(self) -> None:
+        """Raise when the backend is unreachable or misconfigured."""
         ...
 
     def upsert_visual(self, collection: str, pages: list[VisualPage]) -> None:

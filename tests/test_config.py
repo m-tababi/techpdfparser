@@ -82,3 +82,16 @@ class TestLoadConfig:
     def test_missing_adapter_returns_empty_dict(self):
         cfg = default_config()
         assert get_adapter_config(cfg, "nonexistent") == {}
+
+    def test_section_aware_requires_structured_extractor(self, tmp_path: Path):
+        yaml_content = textwrap.dedent("""\
+            pipelines:
+              text:
+                extractor: olmocr2
+                chunker: section_aware
+        """)
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml_content)
+
+        with pytest.raises(ValueError, match="section_aware"):
+            load_config(config_file)

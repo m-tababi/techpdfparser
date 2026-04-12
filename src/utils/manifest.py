@@ -31,7 +31,7 @@ class ManifestBuilder:
         self._started_at = datetime.now(timezone.utc)
         self._tool_versions: dict[str, str] = {}
         self._counts: dict[str, int] = {}
-        self._qdrant: dict[str, Any] = {}
+        self._index: dict[str, Any] = {}
 
     def set_tool_version(self, tool_name: str, version: str) -> None:
         self._tool_versions[tool_name] = version
@@ -39,8 +39,32 @@ class ManifestBuilder:
     def set_counts(self, **kwargs: int) -> None:
         self._counts.update(kwargs)
 
+    def set_index_info(
+        self,
+        *,
+        backend: str,
+        namespace: str,
+        collections: str | list[str],
+        upserted: int,
+        adapter_signatures: dict[str, str] | None = None,
+        vector_schemas: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        self._index = {
+            "backend": backend,
+            "namespace": namespace,
+            "collections": collections,
+            "upserted": upserted,
+            "adapter_signatures": adapter_signatures or {},
+            "vector_schemas": vector_schemas or {},
+        }
+
     def set_qdrant_info(self, collection: str, upserted: int) -> None:
-        self._qdrant = {"collection": collection, "upserted": upserted}
+        self.set_index_info(
+            backend="qdrant",
+            namespace="legacy",
+            collections=collection,
+            upserted=upserted,
+        )
 
     def write(self, run_dir: Path) -> None:
         finished_at = datetime.now(timezone.utc)
@@ -57,7 +81,15 @@ class ManifestBuilder:
             "tool_versions": self._tool_versions,
             "config": self.config,
             "counts": self._counts,
-            "qdrant": self._qdrant,
+            "index": self._index,
         }
         path = run_dir / "manifest.json"
         path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def record_tool_version(manifest: ManifestBuilder, adapter: object) -> None:
+    """Record adapter version only when both fields are concrete strings."""
+    tool_name = getattr(adapter, "tool_name", None)
+    tool_version = getattr(adapter, "tool_version", None)
+    if isinstance(tool_name, str) and isinstance(tool_version, str):
+        manifest.set_tool_version(tool_name, tool_version)

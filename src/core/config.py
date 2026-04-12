@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class StorageConfig(BaseModel):
@@ -51,6 +51,9 @@ class PipelinesConfig(BaseModel):
 class RetrievalConfig(BaseModel):
     retrieval_engine: str = "qdrant"
     fusion_engine: str = "rrf"
+    index_namespace: str = "auto"
+    validate_on_start: bool = True
+    fail_on_schema_mismatch: bool = True
 
 
 class AppConfig(BaseModel):
@@ -61,6 +64,19 @@ class AppConfig(BaseModel):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     # Per-adapter settings keyed by adapter name (e.g. "colqwen25", "qdrant")
     adapters: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_chunker_dependencies(self) -> "AppConfig":
+        if (
+            self.pipelines.text.chunker == "section_aware"
+            and self.pipelines.text.extractor != "pymupdf_structured"
+        ):
+            raise ValueError(
+                "The 'section_aware' chunker requires an extractor that emits "
+                "section metadata. Use 'pymupdf_structured' for "
+                "pipelines.text.extractor."
+            )
+        return self
 
 
 def load_config(path: str | Path) -> AppConfig:

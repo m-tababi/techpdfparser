@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ...core.indexing import VectorSchema, build_adapter_signature
 from ...core.registry import register_text_embedder
 
 
@@ -56,6 +57,22 @@ class BGEM3Embedder:
     @property
     def embedding_dim(self) -> int:
         return self.EMBEDDING_DIM
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def vector_schema(self) -> VectorSchema:
+        return VectorSchema(dim=self.embedding_dim, distance="cosine", multi_vector=False)
+
+    @property
+    def adapter_signature(self) -> str:
+        return build_adapter_signature(
+            tool_name=self.tool_name,
+            model_name=self.model_name,
+            schema=self.vector_schema,
+        )
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a list of strings in batches. Returns one vector per text."""

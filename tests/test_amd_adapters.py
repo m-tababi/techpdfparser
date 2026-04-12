@@ -286,8 +286,15 @@ class TestPdfPlumberParser:
         mock_doc = MagicMock()
         mock_doc.__iter__ = MagicMock(return_value=iter([]))
 
-        with patch("pdfplumber.open", return_value=mock_pdf), \
-             patch("fitz.open", return_value=mock_doc):
+        fake_pdfplumber = ModuleType("pdfplumber")
+        fake_pdfplumber.open = MagicMock(return_value=mock_pdf)
+        fake_fitz = ModuleType("fitz")
+        fake_fitz.open = MagicMock(return_value=mock_doc)
+
+        with patch.dict(
+            sys.modules,
+            {"pdfplumber": fake_pdfplumber, "fitz": fake_fitz},
+        ):
             tables, formulas, figures = adapter.parse(Path("test.pdf"), "doc1")
 
         assert formulas == []

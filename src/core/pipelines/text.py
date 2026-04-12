@@ -3,18 +3,24 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from ...utils.jsonl import write_jsonl
+from ...utils.manifest import ManifestBuilder, record_tool_version
+from ...utils.sections import write_sections
+from ...utils.storage import StorageManager
+from ...utils.timing import timed
 from ..config import TextPipelineConfig
+from ..indexing import (
+    ResolvedIndexLayout,
+    VectorSchema,
+    get_text_vector_schema,
+    layout_metadata,
+)
 from ..interfaces.chunker import TextChunker
 from ..interfaces.embedder import TextEmbedder
 from ..interfaces.extractor import TextExtractor
 from ..interfaces.indexer import IndexWriter
 from ..models.document import DocumentMeta
 from ..models.elements import TextChunk
-from ...utils.jsonl import write_jsonl
-from ...utils.manifest import ManifestBuilder
-from ...utils.sections import write_sections
-from ...utils.storage import StorageManager
-from ...utils.timing import timed
 
 logger = logging.getLogger("techpdfparser.pipelines.text")
 
@@ -34,6 +40,8 @@ class TextPipeline:
         index_writer: IndexWriter,
         storage: StorageManager,
         config: TextPipelineConfig,
+        index_layout: ResolvedIndexLayout | None = None,
+        fail_on_schema_mismatch: bool = True,
     ) -> None:
         self.extractor = extractor
         self.chunker = chunker
@@ -41,6 +49,8 @@ class TextPipeline:
         self.index_writer = index_writer
         self.storage = storage
         self.config = config
+        self.index_layout = index_layout
+        self.fail_on_schema_mismatch = fail_on_schema_mismatch
 
     def run(self, pdf_path: Path, doc_meta: DocumentMeta) -> list[TextChunk]:
         """Run the full text pipeline for one document."""
@@ -60,8 +70,12 @@ class TextPipeline:
         )
         logger.info(f"Text pipeline start | doc={doc_meta.doc_id} | run={run_id}")
 
+        collection_name = self._collection_name()
+        schema = self._vector_schema()
         self.index_writer.ensure_collection(
-            self.config.collection, self.embedder.embedding_dim
+            collection_name,
+            schema,
+            fail_on_schema_mismatch=self.fail_on_schema_mismatch,
         )
 
         with timed("extract") as t:
@@ -86,19 +100,38 @@ class TextPipeline:
         logger.info(f"Embedded {len(chunks)} chunks in {t.elapsed_seconds:.2f}s")
 
         with timed("index_write") as t:
-            self.index_writer.upsert_text(self.config.collection, chunks)
+            self.index_writer.upsert_text(collection_name, chunks)
         logger.info(f"Indexed {len(chunks)} chunks in {t.elapsed_seconds:.2f}s")
 
-        self._write_outputs(run_dir, raw_blocks, chunks, manifest)
+        self._write_outputs(run_dir, raw_blocks, chunks, manifest, collection_name, schema)
         self.storage.update_document_index(
-            doc_meta.doc_id, str(pdf_path), run_id, "text"
+            doc_meta.doc_id,
+            str(pdf_path),
+            run_id,
+            "text",
+            extra=layout_metadata(self.index_layout) if self.index_layout else None,
         )
 
         return chunks
 
+    def _collection_name(self) -> str:
+        if self.index_layout is not None:
+            return self.index_layout.collections["text"]
+        return self.config.collection
+
+    def _vector_schema(self):
+        if self.index_layout is not None:
+            return self.index_layout.vector_schemas["text"]
+        return get_text_vector_schema(self.embedder)
+
     def _embed(self, chunks: list[TextChunk]) -> list[TextChunk]:
         texts = [c.content for c in chunks]
         embeddings = self.embedder.embed(texts)
+        if len(embeddings) != len(chunks):
+            raise ValueError(
+                "Text embedder returned "
+                f"{len(embeddings)} vectors for {len(chunks)} chunks"
+            )
         for chunk, embedding in zip(chunks, embeddings):
             chunk.embedding = embedding
         return chunks
@@ -109,10 +142,23 @@ class TextPipeline:
         raw_blocks: list[TextChunk],
         chunks: list[TextChunk],
         manifest: ManifestBuilder,
+        collection_name: str,
+        schema: VectorSchema,
     ) -> None:
         # raw_blocks.jsonl already written before chunking; write chunks now
         write_jsonl(run_dir / "chunks.jsonl", chunks)
-        manifest.set_tool_version(self.extractor.tool_name, self.extractor.tool_version)
+        record_tool_version(manifest, self.extractor)
+        record_tool_version(manifest, self.embedder)
         manifest.set_counts(raw_blocks=len(raw_blocks), chunks=len(chunks))
-        manifest.set_qdrant_info(self.config.collection, len(chunks))
+        if self.index_layout is not None:
+            manifest.set_index_info(
+                backend=self.index_layout.backend,
+                namespace=self.index_layout.namespace or "legacy",
+                collections=[collection_name],
+                upserted=len(chunks),
+                adapter_signatures=dict(self.index_layout.adapter_signatures),
+                vector_schemas={"text": schema.model_dump(mode="json")},
+            )
+        else:
+            manifest.set_qdrant_info(collection_name, len(chunks))
         manifest.write(run_dir)

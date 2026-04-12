@@ -1,3 +1,5 @@
+-c constraints-common.txt
+
 # GPU pipeline dependencies — install on top of requirements.txt
 # Pin versions for reproducibility once tested on your hardware.
 

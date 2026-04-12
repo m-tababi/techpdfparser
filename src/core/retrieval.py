@@ -8,7 +8,7 @@ from .models.results import FusionResult
 
 
 class UnifiedRetriever:
-    """Queries all five collections and fuses the results.
+    """Queries all five collections sequentially and fuses the results.
 
     One query produces ranked results across visual pages, text chunks,
     tables, formulas, and figures — regardless of which pipeline indexed them.

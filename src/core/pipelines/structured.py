@@ -6,7 +6,18 @@ from pathlib import Path
 
 from PIL import Image as PILImage
 
+from ...utils.jsonl import write_jsonl
+from ...utils.manifest import ManifestBuilder, record_tool_version
+from ...utils.sections import assign_sections, load_sections
+from ...utils.storage import StorageManager
+from ...utils.timing import timed
 from ..config import StructuredPipelineConfig
+from ..indexing import (
+    ResolvedIndexLayout,
+    VectorSchema,
+    get_text_vector_schema,
+    layout_metadata,
+)
 from ..interfaces.embedder import TextEmbedder
 from ..interfaces.figure import FigureDescriptor
 from ..interfaces.formula import FormulaExtractor
@@ -15,11 +26,6 @@ from ..interfaces.parser import StructuredParser
 from ..interfaces.renderer import PageRenderer
 from ..models.document import DocumentMeta
 from ..models.elements import Figure, Formula, Table
-from ...utils.jsonl import write_jsonl
-from ...utils.manifest import ManifestBuilder
-from ...utils.sections import SectionMarker, assign_sections, load_sections
-from ...utils.storage import StorageManager
-from ...utils.timing import timed
 
 logger = logging.getLogger("techpdfparser.pipelines.structured")
 
@@ -42,6 +48,8 @@ class StructuredPipeline:
         storage: StorageManager,
         config: StructuredPipelineConfig,
         renderer: PageRenderer | None = None,
+        index_layout: ResolvedIndexLayout | None = None,
+        fail_on_schema_mismatch: bool = True,
     ) -> None:
         self.parser = parser
         self.formula_extractor = formula_extractor
@@ -52,6 +60,8 @@ class StructuredPipeline:
         self.config = config
         # Optional: needed only for formula image cropping (PP-FormulaNet standalone)
         self.renderer = renderer
+        self.index_layout = index_layout
+        self.fail_on_schema_mismatch = fail_on_schema_mismatch
 
     def run(
         self, pdf_path: Path, doc_meta: DocumentMeta
@@ -76,9 +86,14 @@ class StructuredPipeline:
         )
         logger.info(f"Structured pipeline start | doc={doc_meta.doc_id} | run={run_id}")
 
-        cols = self.config.collections
-        for col in [cols.tables, cols.formulas, cols.figures]:
-            self.index_writer.ensure_collection(col, self.embedder.embedding_dim)
+        collection_names = self._collection_names()
+        schema = self._vector_schema()
+        for key in ["tables", "formulas", "figures"]:
+            self.index_writer.ensure_collection(
+                collection_names[key],
+                schema,
+                fail_on_schema_mismatch=self.fail_on_schema_mismatch,
+            )
 
         with timed("parse") as t:
             tables, formulas, figures = self.parser.parse(pdf_path, doc_meta.doc_id)
@@ -108,16 +123,48 @@ class StructuredPipeline:
         formulas = self._embed_formulas(formulas)
         figures = self._embed_figures(figures)
 
-        self.index_writer.upsert_tables(cols.tables, tables)
-        self.index_writer.upsert_formulas(cols.formulas, formulas)
-        self.index_writer.upsert_figures(cols.figures, figures)
+        self.index_writer.upsert_tables(collection_names["tables"], tables)
+        self.index_writer.upsert_formulas(collection_names["formulas"], formulas)
+        self.index_writer.upsert_figures(collection_names["figures"], figures)
 
-        self._write_outputs(run_dir, tables, formulas, figures, manifest, section_source)
+        self._write_outputs(
+            run_dir,
+            tables,
+            formulas,
+            figures,
+            manifest,
+            collection_names,
+            schema,
+            section_source,
+        )
         self.storage.update_document_index(
-            doc_meta.doc_id, str(pdf_path), run_id, "structured"
+            doc_meta.doc_id,
+            str(pdf_path),
+            run_id,
+            "structured",
+            extra=layout_metadata(self.index_layout) if self.index_layout else None,
         )
 
         return tables, formulas, figures
+
+    def _collection_names(self) -> dict[str, str]:
+        if self.index_layout is not None:
+            return {
+                "tables": self.index_layout.collections["tables"],
+                "formulas": self.index_layout.collections["formulas"],
+                "figures": self.index_layout.collections["figures"],
+            }
+        cols = self.config.collections
+        return {
+            "tables": cols.tables,
+            "formulas": cols.formulas,
+            "figures": cols.figures,
+        }
+
+    def _vector_schema(self):
+        if self.index_layout is not None:
+            return self.index_layout.vector_schemas["tables"]
+        return get_text_vector_schema(self.embedder)
 
     def _persist_figures(self, figures: list[Figure], run_dir: Path) -> list[Figure]:
         """Move figure images from the parser's tempdir into the run directory.
@@ -143,8 +190,8 @@ class StructuredPipeline:
         """Run VLM description on figures that have an image but no description yet."""
         for fig in figures:
             if fig.description is None and fig.image_path:
-                img = PILImage.open(fig.image_path)
-                fig.description = self.figure_descriptor.describe(img)
+                with PILImage.open(fig.image_path) as img:
+                    fig.description = self.figure_descriptor.describe(img.copy())
         return figures
 
     def _enrich_formulas(self, formulas: list[Formula], pdf_path: Path) -> list[Formula]:
@@ -172,6 +219,11 @@ class StructuredPipeline:
         if not tables:
             return tables
         embeddings = self.embedder.embed([t.content for t in tables])
+        if len(embeddings) != len(tables):
+            raise ValueError(
+                "Text embedder returned "
+                f"{len(embeddings)} vectors for {len(tables)} tables"
+            )
         for table, emb in zip(tables, embeddings):
             table.embedding = emb
         return tables
@@ -182,6 +234,11 @@ class StructuredPipeline:
         # Prefer LaTeX for embedding; fall back to plain-text content
         texts = [f.latex if f.latex else f.content for f in formulas]
         embeddings = self.embedder.embed(texts)
+        if len(embeddings) != len(formulas):
+            raise ValueError(
+                "Text embedder returned "
+                f"{len(embeddings)} vectors for {len(formulas)} formulas"
+            )
         for formula, emb in zip(formulas, embeddings):
             formula.embedding = emb
         return formulas
@@ -192,6 +249,11 @@ class StructuredPipeline:
         # Use VLM description if available, otherwise fall back to caption
         texts = [fig.description or fig.caption or "" for fig in figures]
         embeddings = self.embedder.embed(texts)
+        if len(embeddings) != len(figures):
+            raise ValueError(
+                "Text embedder returned "
+                f"{len(embeddings)} vectors for {len(figures)} figures"
+            )
         for fig, emb in zip(figures, embeddings):
             fig.embedding = emb
         return figures
@@ -203,19 +265,38 @@ class StructuredPipeline:
         formulas: list[Formula],
         figures: list[Figure],
         manifest: ManifestBuilder,
+        collection_names: dict[str, str],
+        schema: VectorSchema,
         section_source: str | None = None,
     ) -> None:
         write_jsonl(run_dir / "tables.jsonl", tables)
         write_jsonl(run_dir / "formulas.jsonl", formulas)
         write_jsonl(run_dir / "figures.jsonl", figures)
+        record_tool_version(manifest, self.parser)
+        record_tool_version(manifest, self.formula_extractor)
+        record_tool_version(manifest, self.figure_descriptor)
+        record_tool_version(manifest, self.embedder)
         manifest.set_counts(
             tables=len(tables), formulas=len(formulas), figures=len(figures)
         )
-        cols = self.config.collections
-        manifest.set_qdrant_info(
-            f"{cols.tables},{cols.formulas},{cols.figures}",
-            len(tables) + len(formulas) + len(figures),
-        )
+        if self.index_layout is not None:
+            manifest.set_index_info(
+                backend=self.index_layout.backend,
+                namespace=self.index_layout.namespace or "legacy",
+                collections=list(collection_names.values()),
+                upserted=len(tables) + len(formulas) + len(figures),
+                adapter_signatures=dict(self.index_layout.adapter_signatures),
+                vector_schemas={
+                    "tables": schema.model_dump(mode="json"),
+                    "formulas": schema.model_dump(mode="json"),
+                    "figures": schema.model_dump(mode="json"),
+                },
+            )
+        else:
+            manifest.set_qdrant_info(
+                ",".join(collection_names.values()),
+                len(tables) + len(formulas) + len(figures),
+            )
         if section_source is not None:
             manifest.config["section_source"] = section_source
         manifest.write(run_dir)

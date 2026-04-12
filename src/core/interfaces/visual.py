@@ -4,6 +4,8 @@ from typing import Protocol
 
 from PIL.Image import Image
 
+from ..indexing import VectorSchema
+
 
 class VisualEmbedder(Protocol):
     """Generates visual embeddings for page images.
@@ -29,6 +31,16 @@ class VisualEmbedder(Protocol):
     @property
     def is_multi_vector(self) -> bool:
         """True for late-interaction models like ColQwen2.5 / ColPali."""
+        ...
+
+    @property
+    def vector_schema(self) -> VectorSchema:
+        """Schema used by the vector DB for this embedder."""
+        ...
+
+    @property
+    def adapter_signature(self) -> str:
+        """Deterministic signature for namespaceing and manifests."""
         ...
 
     def embed_page(self, image: Image) -> list[list[float]]:

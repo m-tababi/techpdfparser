@@ -11,26 +11,31 @@ to instantiate the right class based on the YAML config.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
-_RENDERERS: dict[str, type] = {}
-_VISUAL_EMBEDDERS: dict[str, type] = {}
-_TEXT_EXTRACTORS: dict[str, type] = {}
-_TEXT_CHUNKERS: dict[str, type] = {}
-_TEXT_EMBEDDERS: dict[str, type] = {}
-_STRUCTURED_PARSERS: dict[str, type] = {}
-_FORMULA_EXTRACTORS: dict[str, type] = {}
-_FIGURE_DESCRIPTORS: dict[str, type] = {}
-_INDEX_WRITERS: dict[str, type] = {}
-_RETRIEVAL_ENGINES: dict[str, type] = {}
-_FUSION_ENGINES: dict[str, type] = {}
+AdapterRegistry = dict[str, type[Any]]
+RegisterDecorator = Callable[[type[Any]], type[Any]]
+RegisterFunction = Callable[[str], RegisterDecorator]
+GetFunction = Callable[..., Any]
+
+_RENDERERS: AdapterRegistry = {}
+_VISUAL_EMBEDDERS: AdapterRegistry = {}
+_TEXT_EXTRACTORS: AdapterRegistry = {}
+_TEXT_CHUNKERS: AdapterRegistry = {}
+_TEXT_EMBEDDERS: AdapterRegistry = {}
+_STRUCTURED_PARSERS: AdapterRegistry = {}
+_FORMULA_EXTRACTORS: AdapterRegistry = {}
+_FIGURE_DESCRIPTORS: AdapterRegistry = {}
+_INDEX_WRITERS: AdapterRegistry = {}
+_RETRIEVAL_ENGINES: AdapterRegistry = {}
+_FUSION_ENGINES: AdapterRegistry = {}
 
 
-def _make_register(registry: dict[str, type]):
+def _make_register(registry: AdapterRegistry) -> RegisterFunction:
     """Factory: returns a class decorator that inserts into `registry`."""
 
-    def register(name: str):
-        def decorator(cls: type) -> type:
+    def register(name: str) -> RegisterDecorator:
+        def decorator(cls: type[Any]) -> type[Any]:
             registry[name] = cls
             return cls
 
@@ -39,7 +44,7 @@ def _make_register(registry: dict[str, type]):
     return register
 
 
-def _make_get(registry: dict[str, type], category: str):
+def _make_get(registry: AdapterRegistry, category: str) -> GetFunction:
     """Factory: returns a lookup function that instantiates from `registry`."""
 
     def get(name: str, **kwargs: Any) -> Any:

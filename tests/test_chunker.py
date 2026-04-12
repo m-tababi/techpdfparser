@@ -19,6 +19,14 @@ def make_block(content: str, page: int = 0) -> TextChunk:
 
 
 class TestFixedSizeChunker:
+    def test_rejects_invalid_chunk_size(self):
+        with pytest.raises(ValueError, match="chunk_size"):
+            FixedSizeChunker(chunk_size=0, chunk_overlap=0)
+
+    def test_rejects_invalid_overlap(self):
+        with pytest.raises(ValueError, match="chunk_overlap"):
+            FixedSizeChunker(chunk_size=10, chunk_overlap=10)
+
     def test_short_block_returned_unchanged(self):
         chunker = FixedSizeChunker(chunk_size=100, chunk_overlap=10)
         block = make_block("Short text")

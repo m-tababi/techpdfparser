@@ -3,17 +3,23 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from ...utils.ids import generate_element_id
+from ...utils.jsonl import write_jsonl
+from ...utils.manifest import ManifestBuilder, record_tool_version
+from ...utils.storage import StorageManager
+from ...utils.timing import timed
 from ..config import VisualPipelineConfig
+from ..indexing import (
+    ResolvedIndexLayout,
+    VectorSchema,
+    get_visual_vector_schema,
+    layout_metadata,
+)
 from ..interfaces.indexer import IndexWriter
 from ..interfaces.renderer import PageRenderer
 from ..interfaces.visual import VisualEmbedder
 from ..models.document import DocumentMeta
 from ..models.elements import VisualPage
-from ...utils.ids import generate_element_id
-from ...utils.jsonl import write_jsonl
-from ...utils.manifest import ManifestBuilder
-from ...utils.storage import StorageManager
-from ...utils.timing import timed
 
 logger = logging.getLogger("techpdfparser.pipelines.visual")
 
@@ -33,12 +39,16 @@ class VisualPipeline:
         index_writer: IndexWriter,
         storage: StorageManager,
         config: VisualPipelineConfig,
+        index_layout: ResolvedIndexLayout | None = None,
+        fail_on_schema_mismatch: bool = True,
     ) -> None:
         self.renderer = renderer
         self.embedder = embedder
         self.index_writer = index_writer
         self.storage = storage
         self.config = config
+        self.index_layout = index_layout
+        self.fail_on_schema_mismatch = fail_on_schema_mismatch
 
     def run(self, pdf_path: Path, doc_meta: DocumentMeta) -> list[VisualPage]:
         """Run the full visual pipeline for one document."""
@@ -55,10 +65,12 @@ class VisualPipeline:
         )
         logger.info(f"Visual pipeline start | doc={doc_meta.doc_id} | run={run_id}")
 
+        collection_name = self._collection_name()
+        schema = self._vector_schema()
         self.index_writer.ensure_collection(
-            self.config.collection,
-            self.embedder.embedding_dim,
-            is_multi_vector=self.embedder.is_multi_vector,
+            collection_name,
+            schema,
+            fail_on_schema_mismatch=self.fail_on_schema_mismatch,
         )
 
         with timed("render_and_embed") as t:
@@ -66,15 +78,29 @@ class VisualPipeline:
         logger.info(f"Rendered and embedded {len(pages)} pages in {t.elapsed_seconds:.2f}s")
 
         with timed("index_write") as t:
-            self.index_writer.upsert_visual(self.config.collection, pages)
+            self.index_writer.upsert_visual(collection_name, pages)
         logger.info(f"Indexed {len(pages)} pages in {t.elapsed_seconds:.2f}s")
 
-        self._write_outputs(run_dir, pages, manifest)
+        self._write_outputs(run_dir, pages, manifest, collection_name, schema)
         self.storage.update_document_index(
-            doc_meta.doc_id, str(pdf_path), run_id, "visual"
+            doc_meta.doc_id,
+            str(pdf_path),
+            run_id,
+            "visual",
+            extra=layout_metadata(self.index_layout) if self.index_layout else None,
         )
 
         return pages
+
+    def _collection_name(self) -> str:
+        if self.index_layout is not None:
+            return self.index_layout.collections["visual"]
+        return self.config.collection
+
+    def _vector_schema(self):
+        if self.index_layout is not None:
+            return self.index_layout.vector_schemas["visual"]
+        return get_visual_vector_schema(self.embedder)
 
     def _render_and_embed(
         self, pdf_path: Path, doc_meta: DocumentMeta, run_dir: Path
@@ -106,10 +132,26 @@ class VisualPipeline:
         return pages
 
     def _write_outputs(
-        self, run_dir: Path, pages: list[VisualPage], manifest: ManifestBuilder
+        self,
+        run_dir: Path,
+        pages: list[VisualPage],
+        manifest: ManifestBuilder,
+        collection_name: str,
+        schema: VectorSchema,
     ) -> None:
         write_jsonl(run_dir / "elements.jsonl", pages)
-        manifest.set_tool_version(self.embedder.tool_name, self.embedder.tool_version)
+        record_tool_version(manifest, self.renderer)
+        record_tool_version(manifest, self.embedder)
         manifest.set_counts(pages=len(pages), elements=len(pages))
-        manifest.set_qdrant_info(self.config.collection, len(pages))
+        if self.index_layout is not None:
+            manifest.set_index_info(
+                backend=self.index_layout.backend,
+                namespace=self.index_layout.namespace or "legacy",
+                collections=[collection_name],
+                upserted=len(pages),
+                adapter_signatures=dict(self.index_layout.adapter_signatures),
+                vector_schemas={"visual": schema.model_dump(mode="json")},
+            )
+        else:
+            manifest.set_qdrant_info(collection_name, len(pages))
         manifest.write(run_dir)

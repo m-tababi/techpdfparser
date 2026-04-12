@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ...core.indexing import VectorSchema, build_adapter_signature
 from ...core.registry import register_visual_embedder
 
 if TYPE_CHECKING:
@@ -71,6 +72,26 @@ class CLIPEmbedder:
         # Single vector wrapped in outer list — see class docstring for why.
         return True
 
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def vector_schema(self) -> VectorSchema:
+        return VectorSchema(
+            dim=self.embedding_dim,
+            distance="cosine",
+            multi_vector=self.is_multi_vector,
+        )
+
+    @property
+    def adapter_signature(self) -> str:
+        return build_adapter_signature(
+            tool_name=self.tool_name,
+            model_name=self.model_name,
+            schema=self.vector_schema,
+        )
+
     def embed_page(self, image: Image) -> list[list[float]]:
         """Embed a page image into a single 512-dim vector (wrapped in outer list)."""
         self._load()
@@ -86,10 +107,12 @@ class CLIPEmbedder:
 
         inputs = self._processor(images=image, return_tensors="pt").to(self._device)
         with torch.no_grad():
-            # Call vision model directly — avoids transformers version differences
-            # where get_image_features() returns BaseModelOutputWithPooling instead of a tensor.
-            vision_out = self._model.vision_model(pixel_values=inputs["pixel_values"])
-            features = self._model.visual_projection(vision_out.pooler_output)
+            get_image_features = getattr(self._model, "get_image_features", None)
+            if callable(get_image_features):
+                features = get_image_features(pixel_values=inputs["pixel_values"])
+            else:
+                vision_out = self._model.vision_model(pixel_values=inputs["pixel_values"])
+                features = self._model.visual_projection(vision_out.pooler_output)
             features = features / features.norm(dim=-1, keepdim=True)
         return features[0].cpu().float().tolist()
 
@@ -100,11 +123,17 @@ class CLIPEmbedder:
             self._device
         )
         with torch.no_grad():
-            # Same approach: call text model directly for version robustness.
-            text_out = self._model.text_model(
-                input_ids=inputs["input_ids"],
-                attention_mask=inputs.get("attention_mask"),
-            )
-            features = self._model.text_projection(text_out.pooler_output)
+            get_text_features = getattr(self._model, "get_text_features", None)
+            if callable(get_text_features):
+                features = get_text_features(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs.get("attention_mask"),
+                )
+            else:
+                text_out = self._model.text_model(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs.get("attention_mask"),
+                )
+                features = self._model.text_projection(text_out.pooler_output)
             features = features / features.norm(dim=-1, keepdim=True)
         return features[0].cpu().float().tolist()

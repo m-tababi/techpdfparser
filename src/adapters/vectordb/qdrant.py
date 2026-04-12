@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...core.indexing import VectorSchema, normalize_distance, schema_matches
+from ...core.models.document import BoundingBox
 from ...core.models.elements import Figure, Formula, Table, TextChunk, VisualPage
 from ...core.models.results import RetrievalResult
 from ...core.registry import register_index_writer, register_retrieval_engine
 
 
-def _connect(host: str, port: int):
+def _connect(host: str, port: int) -> Any:
     try:
         from qdrant_client import QdrantClient
 
@@ -16,10 +18,11 @@ def _connect(host: str, port: int):
         if host == ":memory:":
             return QdrantClient(location=":memory:")
         return QdrantClient(host=host, port=port)
-    except ImportError:
+    except ImportError as exc:
         raise ImportError(
-            "qdrant-client not installed. Run: pip install qdrant-client"
-        )
+            "Failed to import qdrant-client or one of its dependencies. "
+            "Run: pip install qdrant-client and verify the environment."
+        ) from exc
 
 
 def _to_point_id(hex_id: str) -> str:
@@ -34,6 +37,7 @@ def _to_point_id(hex_id: str) -> str:
 
 def _base_payload(element: Any) -> dict:
     return {
+        "object_id": element.object_id,
         "doc_id": element.doc_id,
         "source_file": element.source_file,
         "page_number": element.page_number,
@@ -41,7 +45,57 @@ def _base_payload(element: Any) -> dict:
         "tool_name": element.tool_name,
         "tool_version": element.tool_version,
         "bbox": element.bbox.model_dump() if element.bbox else None,
+        "raw_output_path": element.raw_output_path,
+        "parent_id": element.parent_id,
+        "child_ids": element.child_ids,
+        "section_title": element.section_title,
+        "section_path": element.section_path,
+        "heading_level": element.heading_level,
     }
+
+
+def _is_not_found_error(exc: Exception) -> bool:
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) == 404:
+        return True
+    if getattr(exc, "status_code", None) == 404:
+        return True
+    return "not found" in str(exc).lower()
+
+
+def _qdrant_distance(name: str) -> Any:
+    from qdrant_client.models import Distance
+
+    normalized = normalize_distance(name)
+    mapping = {
+        "cosine": Distance.COSINE,
+        "dot": Distance.DOT,
+        "euclid": Distance.EUCLID,
+    }
+    if normalized not in mapping:
+        raise ValueError(f"Unsupported Qdrant distance '{name}'")
+    return mapping[normalized]
+
+
+def _schema_from_qdrant(vectors: Any) -> VectorSchema:
+    if isinstance(vectors, dict):
+        if len(vectors) != 1:
+            raise ValueError("Named-vector collections are not supported by this adapter")
+        vectors = next(iter(vectors.values()))
+
+    distance = getattr(vectors, "distance", "cosine")
+    if hasattr(distance, "name"):
+        distance = distance.name
+
+    size = getattr(vectors, "size", None)
+    if size is None:
+        raise ValueError("Qdrant collection does not expose a vector size")
+
+    return VectorSchema(
+        dim=int(size),
+        distance=normalize_distance(str(distance)),
+        multi_vector=getattr(vectors, "multivector_config", None) is not None,
+    )
 
 
 @register_index_writer("qdrant")
@@ -76,28 +130,59 @@ class QdrantIndexWriter:
     def _col(self, name: str) -> str:
         return f"{self._prefix}{name}" if self._prefix else name
 
+    def healthcheck(self) -> None:
+        self._get_client().get_collections()
+
+    def get_collection_schema(self, collection: str) -> VectorSchema | None:
+        client = self._get_client()
+        col = self._col(collection)
+        try:
+            info = client.get_collection(collection_name=col)
+        except Exception as exc:
+            if _is_not_found_error(exc):
+                return None
+            raise
+        return _schema_from_qdrant(info.config.params.vectors)
+
     def ensure_collection(
-        self, collection: str, dim: int, is_multi_vector: bool = False
+        self,
+        collection: str,
+        schema: VectorSchema,
+        fail_on_schema_mismatch: bool = True,
     ) -> None:
         client = self._get_client()
-        from qdrant_client.models import Distance, MultiVectorComparator, MultiVectorConfig, VectorParams
+        from qdrant_client.models import (
+            MultiVectorComparator,
+            MultiVectorConfig,
+            VectorParams,
+        )
 
         col = self._col(collection)
-        existing = {c.name for c in client.get_collections().collections}
-        if col in existing:
+        existing_schema = self.get_collection_schema(collection)
+        if existing_schema is not None:
+            if not schema_matches(schema, existing_schema):
+                message = (
+                    f"Collection '{col}' has schema {existing_schema.model_dump()} "
+                    f"but expected {schema.model_dump()}"
+                )
+                if fail_on_schema_mismatch:
+                    raise ValueError(message)
             return
 
-        if is_multi_vector:
+        if schema.multi_vector:
             # MaxSim over patch vectors — correct scoring for ColQwen/ColPali
             vector_config = VectorParams(
-                size=dim,
-                distance=Distance.COSINE,
+                size=schema.dim,
+                distance=_qdrant_distance(schema.distance),
                 multivector_config=MultiVectorConfig(
                     comparator=MultiVectorComparator.MAX_SIM
                 ),
             )
         else:
-            vector_config = VectorParams(size=dim, distance=Distance.COSINE)
+            vector_config = VectorParams(
+                size=schema.dim,
+                distance=_qdrant_distance(schema.distance),
+            )
 
         client.create_collection(collection_name=col, vectors_config=vector_config)
 
@@ -125,7 +210,12 @@ class QdrantIndexWriter:
             PointStruct(
                 id=_to_point_id(chunk.object_id),
                 vector=chunk.embedding,
-                payload={**_base_payload(chunk), "content": chunk.content},
+                payload={
+                    **_base_payload(chunk),
+                    "content": chunk.content,
+                    "char_start": chunk.char_start,
+                    "char_end": chunk.char_end,
+                },
             )
             for chunk in chunks
             if chunk.embedding
@@ -157,7 +247,12 @@ class QdrantIndexWriter:
             PointStruct(
                 id=_to_point_id(f.object_id),
                 vector=f.embedding,
-                payload={**_base_payload(f), "latex": f.latex, "content": f.content},
+                payload={
+                    **_base_payload(f),
+                    "latex": f.latex,
+                    "content": f.content,
+                    "image_path": f.image_path,
+                },
             )
             for f in formulas
             if f.embedding
@@ -265,8 +360,6 @@ class QdrantRetrievalEngine:
 
 def _payload_to_element(payload: dict) -> Any:
     """Reconstruct an ExtractedElement from a Qdrant point payload."""
-    from ...core.models.elements import Figure, Formula, Table, TextChunk, VisualPage
-
     obj_type = payload.get("object_type", "")
     base = {
         "object_id": payload.get("object_id", ""),
@@ -275,11 +368,25 @@ def _payload_to_element(payload: dict) -> Any:
         "page_number": payload.get("page_number", 0),
         "tool_name": payload.get("tool_name", ""),
         "tool_version": payload.get("tool_version", ""),
+        "bbox": BoundingBox.model_validate(payload["bbox"])
+        if payload.get("bbox")
+        else None,
+        "raw_output_path": payload.get("raw_output_path"),
+        "parent_id": payload.get("parent_id"),
+        "child_ids": payload.get("child_ids", []),
+        "section_title": payload.get("section_title"),
+        "section_path": payload.get("section_path", []),
+        "heading_level": payload.get("heading_level"),
     }
     if obj_type == "visual_page":
         return VisualPage(**base, image_path=payload.get("image_path", ""))
     if obj_type == "text_chunk":
-        return TextChunk(**base, content=payload.get("content", ""))
+        return TextChunk(
+            **base,
+            content=payload.get("content", ""),
+            char_start=payload.get("char_start"),
+            char_end=payload.get("char_end"),
+        )
     if obj_type == "table":
         return Table(**base, content=payload.get("content", ""))
     if obj_type == "formula":
@@ -287,6 +394,7 @@ def _payload_to_element(payload: dict) -> Any:
             **base,
             latex=payload.get("latex", ""),
             content=payload.get("content", ""),
+            image_path=payload.get("image_path"),
         )
     if obj_type == "figure":
         return Figure(
