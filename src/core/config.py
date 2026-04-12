@@ -70,8 +70,13 @@ def load_config(path: str | Path) -> AppConfig:
     return AppConfig.model_validate(raw or {})
 
 
+_DEFAULT_CONFIG_PATH = Path("config.yaml")
+
+
 def default_config() -> AppConfig:
-    """Return a default AppConfig for testing or quick-start use."""
+    """Load config.yaml from the current directory if present, else use built-in defaults."""
+    if _DEFAULT_CONFIG_PATH.exists():
+        return load_config(_DEFAULT_CONFIG_PATH)
     return AppConfig()
 
 
