@@ -31,12 +31,16 @@ class StorageManager:
     def run_dir(self, doc_id: str, pipeline_name: str, tool_suffix: str) -> Path:
         """Create and return a new versioned run directory.
 
-        Name format: <pipeline>_<tool_suffix>_<YYYYmmdd_HHMMSS>
+        Name format: <pipeline>_<tool_suffix>_<YYYYmmdd_HHMMSS_ffffff>
+
+        Microsecond precision prevents two runs started in the same second
+        from aliasing the same directory and silently overwriting each other.
+        Raises FileExistsError on collision instead of silently reusing the dir.
         """
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         run_id = f"{pipeline_name}_{tool_suffix}_{timestamp}"
         path = self.doc_dir(doc_id) / "runs" / run_id
-        path.mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=False)
         return path
 
     def run_id_from_dir(self, run_dir: Path) -> str:

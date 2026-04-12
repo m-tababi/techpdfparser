@@ -18,5 +18,13 @@ def generate_element_id(
 
 
 def generate_doc_id(source_file: str) -> str:
-    """Generate a stable document ID from the source file path."""
-    return hashlib.sha256(source_file.encode()).hexdigest()[:16]
+    """Generate a stable document ID from the file contents.
+
+    Hashing content (not path) means the same PDF yields the same ID
+    regardless of where it is stored or how it is named.
+    """
+    h = hashlib.sha256()
+    with open(source_file, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]

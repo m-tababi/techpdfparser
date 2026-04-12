@@ -14,7 +14,9 @@ class TestDefaultConfig:
         assert isinstance(cfg, AppConfig)
 
     def test_pipeline_defaults(self):
-        cfg = default_config()
+        # AppConfig() always returns hardcoded defaults regardless of cwd.
+        # default_config() may load config.yaml from cwd — use AppConfig() here.
+        cfg = AppConfig()
         assert cfg.pipelines.visual.renderer == "pymupdf"
         assert cfg.pipelines.visual.embedder == "colqwen25"
         assert cfg.pipelines.text.extractor == "olmocr2"
