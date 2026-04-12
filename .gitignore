@@ -68,5 +68,7 @@ outputs/
 # Local config (copy of config.example.yaml)
 config.yaml
 
+*.bak
+
 # Test PDFs
 *.pdf
