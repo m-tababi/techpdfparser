@@ -46,6 +46,9 @@ class BGEM3Embedder:
                 "FlagEmbedding not installed. Run: pip install FlagEmbedding"
             )
 
+    def unload(self) -> None:
+        self._model = None
+
     @property
     def tool_name(self) -> str:
         return self.TOOL_NAME

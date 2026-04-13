@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ...utils.jsonl import write_jsonl
 from ...utils.manifest import ManifestBuilder, record_tool_version
+from ...utils.runtime import release_runtime_resources
 from ...utils.sections import write_sections
 from ...utils.storage import StorageManager
 from ...utils.timing import timed
@@ -84,6 +85,7 @@ class TextPipeline:
 
         # Persist raw extractor output before chunking
         write_jsonl(run_dir / "raw_blocks.jsonl", raw_blocks)
+        self._write_extractor_markdown(run_dir, raw_blocks)
 
         # Write section markers when the extractor supports it (pymupdf_structured)
         if hasattr(self.extractor, "get_markers"):
@@ -92,12 +94,15 @@ class TextPipeline:
                 write_sections(run_dir / "sections.json", markers)
                 logger.info(f"Wrote {len(markers)} section markers")
 
+        release_runtime_resources(self.extractor)
+
         chunks = self.chunker.chunk(raw_blocks)
         logger.info(f"Chunked into {len(chunks)} chunks")
 
         with timed("embed") as t:
             chunks = self._embed(chunks)
         logger.info(f"Embedded {len(chunks)} chunks in {t.elapsed_seconds:.2f}s")
+        release_runtime_resources(self.embedder)
 
         with timed("index_write") as t:
             self.index_writer.upsert_text(collection_name, chunks)
@@ -135,6 +140,28 @@ class TextPipeline:
         for chunk, embedding in zip(chunks, embeddings):
             chunk.embedding = embedding
         return chunks
+
+    def _write_extractor_markdown(
+        self, run_dir: Path, raw_blocks: list[TextChunk]
+    ) -> None:
+        if not raw_blocks:
+            return
+
+        ordered_blocks = sorted(raw_blocks, key=lambda block: (block.page_number, block.object_id))
+        parts: list[str] = []
+        for block in ordered_blocks:
+            content = block.content.strip()
+            if not content:
+                continue
+            parts.append(f"<!-- page {block.page_number + 1} -->\n{content}")
+
+        if not parts:
+            return
+
+        (run_dir / "extractor_output.md").write_text(
+            "\n\n".join(parts) + "\n",
+            encoding="utf-8",
+        )
 
     def _write_outputs(
         self,

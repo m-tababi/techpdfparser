@@ -44,6 +44,9 @@ class PPFormulaNetExtractor:
                 "paddleocr not installed. Run: pip install paddlepaddle paddleocr"
             )
 
+    def unload(self) -> None:
+        self._ocr = None
+
     @property
     def tool_name(self) -> str:
         return self.TOOL_NAME

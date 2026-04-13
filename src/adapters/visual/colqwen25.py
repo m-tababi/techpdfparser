@@ -56,6 +56,10 @@ class ColQwen25Embedder:
                 "colpali-engine not installed. Run: pip install colpali-engine"
             )
 
+    def unload(self) -> None:
+        self._model = None
+        self._processor = None
+
     @property
     def tool_name(self) -> str:
         return self.TOOL_NAME

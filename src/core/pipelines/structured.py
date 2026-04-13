@@ -8,6 +8,7 @@ from PIL import Image as PILImage
 
 from ...utils.jsonl import write_jsonl
 from ...utils.manifest import ManifestBuilder, record_tool_version
+from ...utils.runtime import release_runtime_resources
 from ...utils.sections import assign_sections, load_sections
 from ...utils.storage import StorageManager
 from ...utils.timing import timed
@@ -115,13 +116,17 @@ class StructuredPipeline:
             # Record which text run provided section data for traceability
             section_source = sections_path.parent.name
             logger.info(f"Linked sections from {section_source}")
+        release_runtime_resources(self.parser)
 
         formulas = self._enrich_formulas(formulas, pdf_path)
+        release_runtime_resources(self.formula_extractor)
         figures = self._enrich_figures(figures)
+        release_runtime_resources(self.figure_descriptor)
 
         tables = self._embed_tables(tables)
         formulas = self._embed_formulas(formulas)
         figures = self._embed_figures(figures)
+        release_runtime_resources(self.embedder)
 
         self.index_writer.upsert_tables(collection_names["tables"], tables)
         self.index_writer.upsert_formulas(collection_names["formulas"], formulas)

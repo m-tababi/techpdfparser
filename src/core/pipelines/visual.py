@@ -6,6 +6,7 @@ from pathlib import Path
 from ...utils.ids import generate_element_id
 from ...utils.jsonl import write_jsonl
 from ...utils.manifest import ManifestBuilder, record_tool_version
+from ...utils.runtime import release_runtime_resources
 from ...utils.storage import StorageManager
 from ...utils.timing import timed
 from ..config import VisualPipelineConfig
@@ -76,6 +77,7 @@ class VisualPipeline:
         with timed("render_and_embed") as t:
             pages = self._render_and_embed(pdf_path, doc_meta, run_dir)
         logger.info(f"Rendered and embedded {len(pages)} pages in {t.elapsed_seconds:.2f}s")
+        release_runtime_resources(self.embedder)
 
         with timed("index_write") as t:
             self.index_writer.upsert_visual(collection_name, pages)

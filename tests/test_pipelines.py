@@ -94,6 +94,7 @@ class TestVisualPipeline:
         assert all(isinstance(p, VisualPage) for p in result)
         renderer.render_all.assert_called_once()
         assert embedder.embed_page.call_count == 2
+        embedder.unload.assert_called_once()
         index_writer.ensure_collection.assert_called_once()
         index_writer.upsert_visual.assert_called_once()
 
@@ -127,10 +128,21 @@ class TestTextPipeline:
         result = pipeline.run(Path(doc_meta.source_file), doc_meta)
 
         extractor.extract_all.assert_called_once()
+        extractor.unload.assert_called_once()
         chunker.chunk.assert_called_once_with(raw_blocks)
         embedder.embed.assert_called_once()
+        embedder.unload.assert_called_once()
         index_writer.upsert_text.assert_called_once()
         assert all(c.embedding is not None for c in result)
+
+        doc_dir = storage.doc_dir(doc_meta.doc_id)
+        markdown_files = list(doc_dir.glob("runs/*/extractor_output.md"))
+        assert len(markdown_files) == 1
+        markdown = markdown_files[0].read_text(encoding="utf-8")
+        assert "<!-- page 1 -->" in markdown
+        assert "Text on page 0" in markdown
+        assert "<!-- page 2 -->" in markdown
+        assert "Text on page 1" in markdown
 
 
 class TestStructuredPipeline:
@@ -182,6 +194,10 @@ class TestStructuredPipeline:
         assert formulas[0].embedding is not None
         assert len(figures) == 1
         assert figures[0].embedding is not None
+        parser.unload.assert_called_once()
+        formula_extractor.unload.assert_called_once()
+        figure_descriptor.unload.assert_called_once()
+        embedder.unload.assert_called_once()
         index_writer.upsert_tables.assert_called_once()
         index_writer.upsert_formulas.assert_called_once()
         index_writer.upsert_figures.assert_called_once()

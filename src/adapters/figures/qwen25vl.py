@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 from ...core.registry import register_figure_descriptor
+from ...utils.runtime import is_cuda_oom, release_runtime_resources
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -39,6 +41,7 @@ class Qwen25VLDescriptor:
     ) -> None:
         self._model_name = model_name
         self._device = device
+        self._runtime_device = device
         self._model = None
         self._processor = None
 
@@ -48,14 +51,43 @@ class Qwen25VLDescriptor:
         try:
             from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
-            self._model = Qwen2VLForConditionalGeneration.from_pretrained(
-                self._model_name, device_map=self._device
-            )
             self._processor = AutoProcessor.from_pretrained(self._model_name)
+            self._load_model(Qwen2VLForConditionalGeneration)
         except ImportError:
             raise ImportError(
                 "transformers not installed. Run: pip install transformers"
             )
+
+    def _load_model(self, model_cls) -> None:
+        try:
+            self._model = model_cls.from_pretrained(
+                self._model_name,
+                device_map=self._runtime_device,
+                torch_dtype="auto",
+            )
+        except Exception as exc:
+            if self._runtime_device == "cpu" or not is_cuda_oom(exc):
+                raise
+
+            warnings.warn(
+                f"{self.TOOL_NAME} ran out of GPU memory; retrying on CPU.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            processor = self._processor
+            self._model = None
+            release_runtime_resources()
+            self._runtime_device = "cpu"
+            self._processor = processor
+            self._model = model_cls.from_pretrained(
+                self._model_name,
+                device_map=self._runtime_device,
+                torch_dtype="auto",
+            )
+
+    def unload(self) -> None:
+        self._model = None
+        self._processor = None
 
     @property
     def tool_name(self) -> str:
@@ -84,7 +116,7 @@ class Qwen25VLDescriptor:
         )
         inputs = self._processor(
             text=[text], images=[image], return_tensors="pt"
-        ).to(self._device)
+        ).to(self._runtime_device)
 
         with torch.no_grad():
             output = self._model.generate(**inputs, max_new_tokens=256)

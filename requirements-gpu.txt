@@ -14,7 +14,7 @@ transformers>=4.44.2,<5 # olmOCR-2, Qwen2.5-VL, FlagEmbedding compatibility
 FlagEmbedding>=1.2      # BGE-M3
 
 # Structured pipeline
-mineru                  # MinerU 2.5-Pro
+mineru[pipeline]        # MinerU parser plus pipeline-only extras (ftfy, albumentations, etc.)
 paddlepaddle-gpu        # PP-FormulaNet (PaddleOCR backend)
 paddleocr>=2.7
 
