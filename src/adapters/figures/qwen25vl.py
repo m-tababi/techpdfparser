@@ -49,10 +49,13 @@ class Qwen25VLDescriptor:
         if self._model is not None:
             return
         try:
-            from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+            from transformers import (
+                AutoProcessor,
+                Qwen2_5_VLForConditionalGeneration,
+            )
 
             self._processor = AutoProcessor.from_pretrained(self._model_name)
-            self._load_model(Qwen2VLForConditionalGeneration)
+            self._load_model(Qwen2_5_VLForConditionalGeneration)
         except ImportError:
             raise ImportError(
                 "transformers not installed. Run: pip install transformers"

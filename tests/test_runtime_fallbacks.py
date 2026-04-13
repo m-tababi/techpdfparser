@@ -66,7 +66,7 @@ def test_qwen_falls_back_to_cpu_on_cuda_oom(monkeypatch):
         "transformers",
         types.SimpleNamespace(
             AutoProcessor=FakeProcessor,
-            Qwen2VLForConditionalGeneration=FakeModel,
+            Qwen2_5_VLForConditionalGeneration=FakeModel,
         ),
     )
 
