@@ -45,7 +45,7 @@ _DEPENDENCY_MODULES: dict[str, tuple[str, ...]] = {
     "pymupdf_structured": ("fitz",),
     "bge_m3": ("FlagEmbedding",),
     "minilm": ("sentence_transformers",),
-    "mineru25": ("mineru.pipeline",),
+    "mineru25": ("mineru.cli.common",),
     "pdfplumber": ("pdfplumber",),
     "ppformulanet": ("paddleocr",),
     "pix2tex": ("pix2tex.cli",),

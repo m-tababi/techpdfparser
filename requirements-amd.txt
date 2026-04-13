@@ -12,7 +12,7 @@
 #   pip install -r requirements-amd.txt
 
 pymupdf>=1.24
-transformers>=4.40
+transformers>=4.44.2,<5
 sentence-transformers>=2.7
 pdfplumber>=0.11
 pix2tex>=0.1.2
