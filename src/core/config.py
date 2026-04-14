@@ -12,7 +12,7 @@ class StorageConfig(BaseModel):
 
 
 class VisualPipelineConfig(BaseModel):
-    renderer: str = "pymupdf"
+    renderer: str = "pymupdf2"
     embedder: str = "colqwen25"
     collection: str = "visual_pages"
     dpi: int = 150
