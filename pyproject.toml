@@ -32,11 +32,6 @@ ignore = ["E501"]
 [tool.mypy]
 python_version = "3.10"
 files = [
-    "src/__main__.py",
-    "src/core",
-    "src/utils",
-    "src/adapters/chunkers",
-    "src/adapters/vectordb",
     "extraction",
 ]
 check_untyped_defs = true
@@ -51,4 +46,4 @@ module = ["yaml"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "extraction/tests"]
+testpaths = ["extraction/tests"]

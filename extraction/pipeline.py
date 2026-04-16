@@ -28,7 +28,6 @@ from .models import (
 )
 from .output import OutputWriter
 
-
 # Types that get visual crops saved
 _VISUAL_TYPES = {
     ElementType.TABLE,

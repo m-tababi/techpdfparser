@@ -5,6 +5,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import extraction.adapters  # noqa: F401 — trigger adapter registration
+
 from .config import ExtractionConfig, load_extraction_config
 from .pipeline import ExtractionPipeline
 from .registry import (
@@ -15,8 +17,6 @@ from .registry import (
     get_table_extractor,
     get_text_extractor,
 )
-
-import extraction.adapters  # noqa: F401 — trigger adapter registration
 
 
 def _parse_args() -> argparse.Namespace:

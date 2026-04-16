@@ -1,4 +1,3 @@
-import json
 
 from extraction.models import (
     ContentList,
@@ -8,8 +7,8 @@ from extraction.models import (
     ElementType,
     PageInfo,
     Region,
-    Section,
     Relation,
+    Section,
 )
 
 

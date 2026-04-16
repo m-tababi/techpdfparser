@@ -3,7 +3,6 @@ from pathlib import Path
 
 from PIL import Image
 
-from extraction.config import ExtractionConfig
 from extraction.models import ElementContent, ElementType, Region
 from extraction.pipeline import ExtractionPipeline
 

@@ -1,16 +1,16 @@
 from extraction.registry import (
+    get_figure_descriptor,
+    get_formula_extractor,
     get_renderer,
     get_segmenter,
-    get_text_extractor,
     get_table_extractor,
-    get_formula_extractor,
-    get_figure_descriptor,
+    get_text_extractor,
+    register_figure_descriptor,
+    register_formula_extractor,
     register_renderer,
     register_segmenter,
-    register_text_extractor,
     register_table_extractor,
-    register_formula_extractor,
-    register_figure_descriptor,
+    register_text_extractor,
 )
 
 
