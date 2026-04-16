@@ -37,6 +37,7 @@ files = [
     "src/utils",
     "src/adapters/chunkers",
     "src/adapters/vectordb",
+    "extraction",
 ]
 check_untyped_defs = true
 disallow_incomplete_defs = true
@@ -50,4 +51,4 @@ module = ["yaml"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "extraction/tests"]
