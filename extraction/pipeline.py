@@ -1,0 +1,217 @@
+"""Extraction pipeline orchestration.
+
+Flow: render pages -> segment -> route regions -> extract -> merge -> write output.
+"""
+from __future__ import annotations
+
+import hashlib
+from pathlib import Path
+
+from PIL.Image import Image
+
+from .interfaces import (
+    FigureDescriptor,
+    FormulaExtractor,
+    PageRenderer,
+    Segmenter,
+    TableExtractor,
+    TextExtractor,
+)
+from .models import (
+    ContentList,
+    DocumentRich,
+    Element,
+    ElementContent,
+    ElementType,
+    PageInfo,
+    Region,
+)
+from .output import OutputWriter
+
+
+# Types that get visual crops saved
+_VISUAL_TYPES = {
+    ElementType.TABLE,
+    ElementType.FORMULA,
+    ElementType.FIGURE,
+    ElementType.DIAGRAM,
+    ElementType.TECHNICAL_DRAWING,
+}
+
+# Map region types to which extractor handles them
+_TEXT_TYPES = {ElementType.TEXT, ElementType.HEADING}
+
+
+class ExtractionPipeline:
+    """Orchestrates the full extraction flow for one PDF."""
+
+    def __init__(
+        self,
+        renderer: PageRenderer,
+        segmenter: Segmenter,
+        text_extractor: TextExtractor,
+        table_extractor: TableExtractor,
+        formula_extractor: FormulaExtractor,
+        figure_descriptor: FigureDescriptor,
+        output_dir: Path,
+        confidence_threshold: float = 0.3,
+    ) -> None:
+        self.renderer = renderer
+        self.segmenter = segmenter
+        self.text_extractor = text_extractor
+        self.table_extractor = table_extractor
+        self.formula_extractor = formula_extractor
+        self.figure_descriptor = figure_descriptor
+        self.output_dir = Path(output_dir)
+        self.confidence_threshold = confidence_threshold
+
+    def run(self, pdf_path: Path) -> ContentList:
+        """Run the full extraction pipeline on a single PDF."""
+        writer = OutputWriter(self.output_dir)
+
+        # 1. Render all pages
+        page_count = self.renderer.page_count(pdf_path)
+        page_images: list[Image] = []
+        for i in range(page_count):
+            img = self.renderer.render_page(pdf_path, i)
+            writer.save_page_image(page=i, image=img)
+            page_images.append(img)
+
+        # 2. Segment
+        regions = self.segmenter.segment(pdf_path)
+        writer.write_segmentation(regions)
+
+        # 3. Route and extract
+        elements: list[Element] = []
+        for idx, region in enumerate(regions):
+            content = self._extract_region(region, page_images)
+            if content is None:
+                continue
+
+            element_id = self._make_element_id(pdf_path, region, idx)
+            extractor_name = self._extractor_for(region)
+
+            el = Element(
+                element_id=element_id,
+                type=region.region_type,
+                page=region.page,
+                bbox=region.bbox,
+                reading_order_index=idx,
+                section_path=[],
+                confidence=region.confidence,
+                extractor=extractor_name,
+                content=content,
+            )
+            elements.append(el)
+
+        # 4. Confidence filter
+        elements = [e for e in elements if e.confidence >= self.confidence_threshold]
+
+        # 5. Save visual crops
+        for el in elements:
+            if el.type in _VISUAL_TYPES and 0 <= el.page < len(page_images):
+                crop = writer.crop_region(page_images[el.page], el.bbox)
+                rel_path = writer.save_element_crop(
+                    page=el.page,
+                    element_id=el.element_id,
+                    element_type=el.type.value,
+                    image=crop,
+                )
+                el.content.image_path = str(
+                    rel_path.relative_to(self.output_dir)
+                )
+
+        # 6. Reassign reading order after filtering
+        for idx, el in enumerate(elements):
+            el.reading_order_index = idx
+
+        # 7. Build output models
+        pages = self._build_page_infos(page_count, elements)
+        content_list = ContentList(
+            doc_id=self._make_doc_id(pdf_path),
+            source_file=str(pdf_path),
+            total_pages=page_count,
+            segmentation_tool=self.segmenter.tool_name,
+            pages=pages,
+            elements=elements,
+        )
+        document_rich = DocumentRich(
+            doc_id=content_list.doc_id,
+            source_file=str(pdf_path),
+            total_pages=page_count,
+            segmentation_tool=self.segmenter.tool_name,
+        )
+
+        # 8. Write output
+        writer.write_content_list(content_list)
+        writer.write_document_rich(document_rich)
+
+        return content_list
+
+    def _extract_region(
+        self, region: Region, page_images: list[Image]
+    ) -> ElementContent | None:
+        # If segmenter already extracted content, use it
+        if region.content is not None:
+            return region.content
+
+        if region.page < 0 or region.page >= len(page_images):
+            return None
+
+        page_img = page_images[region.page]
+
+        if region.region_type in _TEXT_TYPES:
+            return self.text_extractor.extract(page_img, region.page)
+        elif region.region_type == ElementType.TABLE:
+            crop = OutputWriter(self.output_dir).crop_region(page_img, region.bbox)
+            return self.table_extractor.extract(crop, region.page)
+        elif region.region_type == ElementType.FORMULA:
+            crop = OutputWriter(self.output_dir).crop_region(page_img, region.bbox)
+            return self.formula_extractor.extract(crop, region.page)
+        elif region.region_type in {
+            ElementType.FIGURE,
+            ElementType.DIAGRAM,
+            ElementType.TECHNICAL_DRAWING,
+        }:
+            crop = OutputWriter(self.output_dir).crop_region(page_img, region.bbox)
+            description = self.figure_descriptor.describe(crop)
+            return ElementContent(description=description)
+
+        return None
+
+    def _extractor_for(self, region: Region) -> str:
+        if region.content is not None:
+            return self.segmenter.tool_name
+        if region.region_type in _TEXT_TYPES:
+            return self.text_extractor.tool_name
+        if region.region_type == ElementType.TABLE:
+            return self.table_extractor.tool_name
+        if region.region_type == ElementType.FORMULA:
+            return self.formula_extractor.tool_name
+        return self.figure_descriptor.tool_name
+
+    def _build_page_infos(
+        self, page_count: int, elements: list[Element]
+    ) -> list[PageInfo]:
+        pages: list[PageInfo] = []
+        for p in range(page_count):
+            page_elements = [e.element_id for e in elements if e.page == p]
+            pages.append(
+                PageInfo(
+                    page=p,
+                    image_path=f"pages/{p}/page.png",
+                    element_ids=page_elements,
+                )
+            )
+        return pages
+
+    def _make_doc_id(self, pdf_path: Path) -> str:
+        h = hashlib.sha256()
+        with open(pdf_path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()[:16]
+
+    def _make_element_id(self, pdf_path: Path, region: Region, seq: int) -> str:
+        raw = f"{pdf_path}:{region.page}:{region.region_type.value}:{seq}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
