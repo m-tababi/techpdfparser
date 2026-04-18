@@ -125,6 +125,14 @@ class ExtractionPipeline:
                     rel_path.relative_to(self.output_dir)
                 )
 
+        # 5b. Drop visuals that ended up with neither image_path nor description.
+        elements = [
+            e for e in elements
+            if e.type not in _VISUAL_TYPES
+            or e.content.image_path
+            or (e.content.description or "").strip()
+        ]
+
         # 6. Reassign reading order after filtering
         for idx, el in enumerate(elements):
             el.reading_order_index = idx
@@ -151,7 +159,7 @@ class ExtractionPipeline:
             return not (content.markdown or content.text)
         if region_type == ElementType.FORMULA:
             return not (content.latex or content.text)
-        # Visual types: kept as long as pipeline will supply image_path later.
+        # Visual types: drop happens after image cropping (step 5 in run()), not here.
         return False
 
     def _extract_region(

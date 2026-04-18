@@ -81,6 +81,14 @@ class MockFigureDescriptor:
         return "A test figure"
 
 
+class SilentFigureDescriptor:
+    """Returns an empty description — simulates a descriptor failure."""
+    tool_name = "silent_fig"
+
+    def describe(self, image: Image.Image) -> str:
+        return ""
+
+
 def test_pipeline_produces_output_files(tmp_path: Path) -> None:
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake pdf content")
@@ -431,3 +439,70 @@ def test_pipeline_drops_table_without_markdown_or_text(tmp_path: Path) -> None:
     pipe.run(pdf_path)
     data = json.loads((out / "content_list.json").read_text())
     assert not any(e["type"] == "table" for e in data["elements"])
+
+
+def test_pipeline_keeps_visual_with_only_image_path(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+
+    class OneFigureSegmenter:
+        tool_name = "one_fig_seg"
+
+        def segment(self, pdf_path: Path) -> list[Region]:
+            return [
+                Region(
+                    page=0, bbox=[0, 0, 100, 100],
+                    region_type=ElementType.FIGURE, confidence=0.9,
+                    content=None,
+                ),
+            ]
+
+    pipe = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=OneFigureSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=SilentFigureDescriptor(),
+        output_dir=out,
+        confidence_threshold=0.3,
+    )
+    pipe.run(pdf_path)
+    data = json.loads((out / "content_list.json").read_text())
+    assert len(data["elements"]) == 1
+    content = data["elements"][0]["content"]
+    assert "image_path" in content
+    assert content["image_path"]
+
+
+def test_pipeline_drops_visual_without_image_path_or_description(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+
+    class OutOfRangeFigureSegmenter:
+        tool_name = "oor_seg"
+
+        def segment(self, pdf_path: Path) -> list[Region]:
+            return [
+                Region(
+                    page=99, bbox=[0, 0, 100, 100],
+                    region_type=ElementType.FIGURE, confidence=0.9,
+                    content=ElementContent(),
+                ),
+            ]
+
+    pipe = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=OutOfRangeFigureSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=out,
+        confidence_threshold=0.3,
+    )
+    pipe.run(pdf_path)
+    data = json.loads((out / "content_list.json").read_text())
+    assert data["elements"] == []
