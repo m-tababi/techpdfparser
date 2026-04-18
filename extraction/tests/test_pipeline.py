@@ -216,3 +216,29 @@ def test_pipeline_source_file_is_filename_only(tmp_path: Path) -> None:
 
     data = json.loads((output_dir / "content_list.json").read_text())
     assert data["source_file"] == "report.pdf"
+
+
+def test_pipeline_stores_dpi_default_and_override(tmp_path: Path) -> None:
+    default = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=MockSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=tmp_path / "out_default",
+        confidence_threshold=0.3,
+    )
+    overridden = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=MockSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=tmp_path / "out_300",
+        confidence_threshold=0.3,
+        dpi=300,
+    )
+    assert default.dpi == 150
+    assert overridden.dpi == 300

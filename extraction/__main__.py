@@ -68,10 +68,10 @@ def _run_extract(pdf_path: Path, cfg: ExtractionConfig, output_dir: Path | None)
 
     out = output_dir or Path(cfg.output_dir)
 
-    renderer_kwargs = dict(cfg.get_adapter_config(cfg.renderer))
-    renderer_kwargs.setdefault("dpi", cfg.dpi)
-    renderer = get_renderer(cfg.renderer, **renderer_kwargs)
     dpi = _resolve_renderer_dpi(cfg)
+    renderer_kwargs = dict(cfg.get_adapter_config(cfg.renderer))
+    renderer_kwargs.setdefault("dpi", dpi)
+    renderer = get_renderer(cfg.renderer, **renderer_kwargs)
     segmenter = get_segmenter(cfg.segmenter, **cfg.get_adapter_config(cfg.segmenter))
     text_extractor = get_text_extractor(
         cfg.text_extractor, **cfg.get_adapter_config(cfg.text_extractor)
