@@ -1,2 +1,17 @@
-"""Import all adapter modules to trigger @register_* decorators."""
-from . import pymupdf_renderer, pymupdf_text_segmenter, stubs  # noqa: F401
+"""Import all adapter modules to trigger @register_* decorators.
+
+Heavy adapters (MinerU, transformers-based extractors) are wrapped in
+try/except so the module imports cleanly even without their Python
+deps installed — the registry entry is created by the decorator at
+class-body time, which happens only when the module import succeeds.
+"""
+import logging
+
+log = logging.getLogger(__name__)
+
+from . import pymupdf_renderer, pymupdf_text_segmenter, stubs  # noqa: F401, E402
+
+try:
+    from . import mineru25_segmenter  # noqa: F401
+except ImportError as exc:
+    log.debug("mineru25_segmenter not registered: %s", exc)
