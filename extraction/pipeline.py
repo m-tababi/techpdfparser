@@ -66,6 +66,7 @@ class ExtractionPipeline:
 
     def run(self, pdf_path: Path) -> ContentList:
         """Run the full extraction pipeline on a single PDF."""
+        self._assert_output_dir_clean()
         writer = OutputWriter(self.output_dir)
 
         # 1. Render all pages
@@ -203,3 +204,22 @@ class ExtractionPipeline:
             f":{x0},{y0},{x1},{y1}"
         )
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    def _assert_output_dir_clean(self) -> None:
+        """Refuse to mix artefacts from different runs in the same directory."""
+        content_list = self.output_dir / "content_list.json"
+        segmentation = self.output_dir / "segmentation.json"
+        pages_dir = self.output_dir / "pages"
+        conflicts: list[str] = []
+        if content_list.exists():
+            conflicts.append(str(content_list))
+        if segmentation.exists():
+            conflicts.append(str(segmentation))
+        if pages_dir.exists() and any(pages_dir.iterdir()):
+            conflicts.append(str(pages_dir))
+        if conflicts:
+            raise FileExistsError(
+                "Extraction output dir already contains artefacts: "
+                + ", ".join(conflicts)
+                + ". Choose a different --output directory or remove these files."
+            )

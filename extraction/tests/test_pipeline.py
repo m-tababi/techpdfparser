@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from extraction.models import ElementContent, ElementType, Region
@@ -289,3 +290,58 @@ def test_element_id_differs_on_region_type_at_same_bbox(tmp_path: Path) -> None:
     id1 = pipe._make_element_id("docid", r_text)
     id2 = pipe._make_element_id("docid", r_head)
     assert id1 != id2
+
+
+def _make_pipeline(output_dir: Path) -> ExtractionPipeline:
+    return ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=MockSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=output_dir,
+        confidence_threshold=0.3,
+    )
+
+
+def test_pipeline_aborts_when_content_list_exists(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "content_list.json").write_text("{}")
+
+    with pytest.raises(FileExistsError):
+        _make_pipeline(out).run(pdf_path)
+
+
+def test_pipeline_aborts_when_segmentation_json_exists(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "segmentation.json").write_text("[]")
+
+    with pytest.raises(FileExistsError):
+        _make_pipeline(out).run(pdf_path)
+
+
+def test_pipeline_aborts_when_pages_dir_is_nonempty(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    (out / "pages" / "0").mkdir(parents=True)
+    (out / "pages" / "0" / "leftover.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    with pytest.raises(FileExistsError):
+        _make_pipeline(out).run(pdf_path)
+
+
+def test_pipeline_allows_empty_output_dir(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    out.mkdir()
+    _make_pipeline(out).run(pdf_path)  # must not raise
+    assert (out / "content_list.json").exists()
