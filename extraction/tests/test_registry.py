@@ -14,7 +14,7 @@ from extraction.registry import (
 )
 
 
-def test_register_and_get_renderer():
+def test_register_and_get_renderer() -> None:
     @register_renderer("test_renderer")
     class TestRenderer:
         def __init__(self, **kwargs):
@@ -24,7 +24,7 @@ def test_register_and_get_renderer():
     assert instance.kwargs == {"dpi": 150}
 
 
-def test_register_and_get_segmenter():
+def test_register_and_get_segmenter() -> None:
     @register_segmenter("test_seg")
     class TestSeg:
         pass
@@ -33,14 +33,14 @@ def test_register_and_get_segmenter():
     assert instance is not None
 
 
-def test_unknown_adapter_raises_key_error():
+def test_unknown_adapter_raises_key_error() -> None:
     import pytest
 
     with pytest.raises(KeyError, match="Unknown renderer"):
         get_renderer("nonexistent_adapter_xyz")
 
 
-def test_register_all_adapter_types():
+def test_register_all_adapter_types() -> None:
     @register_text_extractor("test_ocr")
     class T1:
         pass

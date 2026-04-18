@@ -80,7 +80,7 @@ class MockFigureDescriptor:
         return "A test figure"
 
 
-def test_pipeline_produces_output_files(tmp_path: Path):
+def test_pipeline_produces_output_files(tmp_path: Path) -> None:
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake pdf content")
     output_dir = tmp_path / "output"
@@ -105,7 +105,7 @@ def test_pipeline_produces_output_files(tmp_path: Path):
     assert list((output_dir / "pages" / "1").glob("*_table.json"))
 
 
-def test_pipeline_elements_in_reading_order(tmp_path: Path):
+def test_pipeline_elements_in_reading_order(tmp_path: Path) -> None:
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake")
     output_dir = tmp_path / "output"
@@ -130,7 +130,7 @@ def test_pipeline_elements_in_reading_order(tmp_path: Path):
     assert elements[2]["type"] == "table"
 
 
-def test_pipeline_page_images_saved(tmp_path: Path):
+def test_pipeline_page_images_saved(tmp_path: Path) -> None:
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake")
     output_dir = tmp_path / "output"
@@ -151,7 +151,7 @@ def test_pipeline_page_images_saved(tmp_path: Path):
     assert (output_dir / "pages" / "1" / "page.png").exists()
 
 
-def test_pipeline_filters_low_confidence(tmp_path: Path):
+def test_pipeline_filters_low_confidence(tmp_path: Path) -> None:
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake")
     output_dir = tmp_path / "output"
@@ -172,7 +172,7 @@ def test_pipeline_filters_low_confidence(tmp_path: Path):
     assert len(data["elements"]) == 0
 
 
-def test_pipeline_text_regions_get_extracted(tmp_path: Path):
+def test_pipeline_text_regions_get_extracted(tmp_path: Path) -> None:
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake")
     output_dir = tmp_path / "output"

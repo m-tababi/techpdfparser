@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import extraction.adapters  # noqa: F401 — trigger adapter registration
 
@@ -104,7 +105,7 @@ def _run_rebuild(
         sys.exit(1)
 
     existing = output_dir / "content_list.json"
-    meta: dict[str, object] = {}
+    meta: dict[str, Any] = {}
     if existing.exists():
         meta = json.loads(existing.read_text(encoding="utf-8"))
 

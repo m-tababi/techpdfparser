@@ -54,7 +54,7 @@ def _make_document_rich() -> DocumentRich:
     )
 
 
-def test_write_content_list(tmp_path: Path):
+def test_write_content_list(tmp_path: Path) -> None:
     cl = _make_content_list()
     writer = OutputWriter(tmp_path)
     writer.write_content_list(cl)
@@ -67,7 +67,7 @@ def test_write_content_list(tmp_path: Path):
     assert data["elements"][0]["content"]["text"] == "Hello world"
 
 
-def test_write_document_rich(tmp_path: Path):
+def test_write_document_rich(tmp_path: Path) -> None:
     dr = _make_document_rich()
     writer = OutputWriter(tmp_path)
     writer.write_document_rich(dr)
@@ -79,7 +79,7 @@ def test_write_document_rich(tmp_path: Path):
     assert data["relations"][0]["source"] == "e001"
 
 
-def test_save_page_image(tmp_path: Path):
+def test_save_page_image(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     img = Image.new("RGB", (100, 100), color="red")
     saved = writer.save_page_image(page=1, image=img)
@@ -88,7 +88,7 @@ def test_save_page_image(tmp_path: Path):
     assert saved == tmp_path / "pages" / "1" / "page.png"
 
 
-def test_save_element_crop(tmp_path: Path):
+def test_save_element_crop(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     img = Image.new("RGB", (50, 30), color="blue")
     saved = writer.save_element_crop(
@@ -99,16 +99,16 @@ def test_save_element_crop(tmp_path: Path):
     assert saved == tmp_path / "pages" / "2" / "e006_table.png"
 
 
-def test_crop_from_page_image(tmp_path: Path):
+def test_crop_from_page_image(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     page_img = Image.new("RGB", (1000, 800), color="white")
-    bbox = [100, 200, 500, 400]
+    bbox = [100.0, 200.0, 500.0, 400.0]
     crop = writer.crop_region(page_img, bbox)
 
     assert crop.size == (400, 200)
 
 
-def test_content_list_excludes_none_in_content(tmp_path: Path):
+def test_content_list_excludes_none_in_content(tmp_path: Path) -> None:
     cl = _make_content_list()
     writer = OutputWriter(tmp_path)
     writer.write_content_list(cl)
@@ -120,7 +120,7 @@ def test_content_list_excludes_none_in_content(tmp_path: Path):
     assert "latex" not in content
 
 
-def test_write_element_sidecar_roundtrip(tmp_path: Path):
+def test_write_element_sidecar_roundtrip(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     element = Element(
         element_id="abc1234567890def",
@@ -141,7 +141,7 @@ def test_write_element_sidecar_roundtrip(tmp_path: Path):
     assert loaded == element
 
 
-def test_build_content_list_from_sidecars_preserves_order(tmp_path: Path):
+def test_build_content_list_from_sidecars_preserves_order(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     # Write three elements on two pages, deliberately out of order.
     elements_in = [

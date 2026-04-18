@@ -15,7 +15,7 @@ import json
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..models import ElementContent, ElementType, Region
 from ..registry import register_segmenter, register_table_extractor
@@ -48,7 +48,7 @@ class MinerU25Segmenter:
 
     def __init__(self, device: str = "cuda") -> None:
         self._device = device
-        self._do_parse = None
+        self._do_parse: Callable[..., Any] | None = None
 
     def _load(self) -> None:
         if self._do_parse is not None:
@@ -116,7 +116,7 @@ class MinerU25TableExtractor:
     def tool_name(self) -> str:
         return self.TOOL_NAME
 
-    def extract(self, region_image, page_number: int) -> ElementContent:
+    def extract(self, region_image: Any, page_number: int) -> ElementContent:
         return ElementContent()
 
 
@@ -187,7 +187,7 @@ def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
         caption_type = (
             _BLOCK_CHART_CAPTION if block_type == _BLOCK_CHART else _BLOCK_IMAGE_CAPTION
         )
-        caption = _collect_block_text(block, caption_type) or None
+        figure_caption = _collect_block_text(block, caption_type) or None
         # image_path is set by the pipeline after cropping the page image;
         # MinerU's internal PNG under parse_dir/images is not carried over.
         region_kind = (
@@ -198,7 +198,7 @@ def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
             bbox=bbox,
             region_type=region_kind,
             confidence=1.0,
-            content=ElementContent(caption=caption) if caption else None,
+            content=ElementContent(caption=figure_caption) if figure_caption else None,
         )
 
     return None

@@ -3,7 +3,7 @@ from pathlib import Path
 from extraction.config import ExtractionConfig, load_extraction_config
 
 
-def test_default_config_has_all_fields():
+def test_default_config_has_all_fields() -> None:
     cfg = ExtractionConfig()
     assert cfg.renderer == "pymupdf"
     assert cfg.segmenter == "mineru25"
@@ -16,7 +16,7 @@ def test_default_config_has_all_fields():
     assert cfg.dpi == 150
 
 
-def test_load_from_yaml(tmp_path: Path):
+def test_load_from_yaml(tmp_path: Path) -> None:
     yaml_content = """
 extraction:
   renderer: pymupdf
@@ -38,11 +38,11 @@ adapters:
     assert cfg.adapters["pymupdf"]["dpi"] == 300
 
 
-def test_get_adapter_config_returns_empty_for_unknown():
+def test_get_adapter_config_returns_empty_for_unknown() -> None:
     cfg = ExtractionConfig()
     assert cfg.get_adapter_config("nonexistent") == {}
 
 
-def test_get_adapter_config_returns_settings():
+def test_get_adapter_config_returns_settings() -> None:
     cfg = ExtractionConfig(adapters={"pymupdf": {"dpi": 300}})
     assert cfg.get_adapter_config("pymupdf") == {"dpi": 300}

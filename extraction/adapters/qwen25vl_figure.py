@@ -9,7 +9,7 @@ Requires: pip install transformers torch
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..registry import register_figure_descriptor
 from ._runtime import is_cuda_oom, release_runtime_resources
@@ -37,8 +37,8 @@ class Qwen25VLFigureDescriptor:
         self._model_name = model_name
         self._device = device
         self._runtime_device = device
-        self._model = None
-        self._processor = None
+        self._model: Any = None
+        self._processor: Any = None
 
     @property
     def tool_name(self) -> str:
@@ -60,7 +60,7 @@ class Qwen25VLFigureDescriptor:
                 "transformers not installed. Run: pip install transformers"
             ) from exc
 
-    def _load_model(self, model_cls) -> None:
+    def _load_model(self, model_cls: Any) -> None:
         try:
             self._model = model_cls.from_pretrained(
                 self._model_name,

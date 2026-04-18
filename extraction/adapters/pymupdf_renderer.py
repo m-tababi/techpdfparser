@@ -42,7 +42,7 @@ class PyMuPDFRenderer:
             mat = self._fitz.Matrix(self._dpi / 72, self._dpi / 72)
             pixmap = page.get_pixmap(matrix=mat, alpha=False)
             return PIL.Image.frombytes(
-                "RGB", [pixmap.width, pixmap.height], pixmap.samples
+                "RGB", (pixmap.width, pixmap.height), pixmap.samples
             )
 
     def render_all(self, pdf_path: Path) -> list[PIL.Image.Image]:

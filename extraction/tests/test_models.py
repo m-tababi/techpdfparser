@@ -12,7 +12,7 @@ from extraction.models import (
 )
 
 
-def test_element_serializes_to_spec_format():
+def test_element_serializes_to_spec_format() -> None:
     el = Element(
         element_id="e001",
         type=ElementType.HEADING,
@@ -32,7 +32,7 @@ def test_element_serializes_to_spec_format():
     assert data["extractor"] == "olmocr2"
 
 
-def test_table_element_has_all_content_fields():
+def test_table_element_has_all_content_fields() -> None:
     el = Element(
         element_id="e006",
         type=ElementType.TABLE,
@@ -55,7 +55,7 @@ def test_table_element_has_all_content_fields():
     assert data["content"]["image_path"] == "pages/2/e006_table.png"
 
 
-def test_content_list_round_trips_json():
+def test_content_list_round_trips_json() -> None:
     cl = ContentList(
         doc_id="abc123",
         source_file="test.pdf",
@@ -84,7 +84,7 @@ def test_content_list_round_trips_json():
     assert parsed.elements[0].content.text == "Hello"
 
 
-def test_document_rich_sections_and_relations():
+def test_document_rich_sections_and_relations() -> None:
     dr = DocumentRich(
         doc_id="abc123",
         source_file="test.pdf",
@@ -113,7 +113,7 @@ def test_document_rich_sections_and_relations():
     assert data["relations"][0]["source"] == "e001"
 
 
-def test_region_holds_segmentation_data():
+def test_region_holds_segmentation_data() -> None:
     r = Region(
         page=1,
         bbox=[100, 200, 500, 400],
@@ -124,7 +124,7 @@ def test_region_holds_segmentation_data():
     assert r.content is None
 
 
-def test_element_content_excludes_none_fields():
+def test_element_content_excludes_none_fields() -> None:
     c = ElementContent(text="just text")
     data = c.model_dump(exclude_none=True)
     assert "text" in data

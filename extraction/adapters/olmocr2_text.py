@@ -13,6 +13,7 @@ import base64
 import re
 import warnings
 from io import BytesIO
+from typing import Any
 
 from PIL import Image as PILImage
 
@@ -50,8 +51,8 @@ class OlmOCR2TextExtractor:
         self._processor_name = processor_name
         self._device = device
         self._runtime_device = device
-        self._model = None
-        self._processor = None
+        self._model: Any = None
+        self._processor: Any = None
 
     @property
     def tool_name(self) -> str:
@@ -70,7 +71,7 @@ class OlmOCR2TextExtractor:
                 "transformers not installed. Run: pip install transformers"
             ) from exc
 
-    def _load_model(self, model_cls) -> None:
+    def _load_model(self, model_cls: Any) -> None:
         try:
             self._model = model_cls.from_pretrained(
                 self._model_name,
@@ -100,12 +101,12 @@ class OlmOCR2TextExtractor:
         self._model = None
         self._processor = None
 
-    def extract(self, page_image, page_number: int) -> ElementContent:
+    def extract(self, page_image: Any, page_number: int) -> ElementContent:
         self._load()
         text = self._run_ocr(page_image)
         return ElementContent(text=text)
 
-    def _run_ocr(self, image) -> str:
+    def _run_ocr(self, image: Any) -> str:
         import torch
 
         image = self._prepare_image(image)
@@ -147,7 +148,7 @@ class OlmOCR2TextExtractor:
         return self._strip_front_matter(text_output)
 
     @staticmethod
-    def _prepare_image(image):
+    def _prepare_image(image: Any) -> Any:
         longest_dim = max(image.size)
         if longest_dim == _TARGET_LONGEST_DIM:
             return image
@@ -159,7 +160,7 @@ class OlmOCR2TextExtractor:
         return image.resize(new_size, resample=PILImage.Resampling.LANCZOS)
 
     @staticmethod
-    def _image_to_base64(image) -> str:
+    def _image_to_base64(image: Any) -> str:
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode("ascii")

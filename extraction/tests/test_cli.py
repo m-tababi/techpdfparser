@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 
-def test_cli_shows_usage_without_args():
+def test_cli_shows_usage_without_args() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "extraction"],
         capture_output=True,
@@ -11,7 +11,7 @@ def test_cli_shows_usage_without_args():
     assert "usage" in result.stdout.lower() or "usage" in result.stderr.lower()
 
 
-def test_cli_extract_requires_pdf_arg():
+def test_cli_extract_requires_pdf_arg() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "extraction", "extract"],
         capture_output=True,
