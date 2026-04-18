@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ..models import ElementContent, ElementType, Region
-from ..registry import register_segmenter
+from ..registry import register_segmenter, register_table_extractor
 
 _BLOCK_TEXT = "text"
 _BLOCK_TITLE = "title"
@@ -98,6 +98,26 @@ class MinerU25Segmenter:
             if region is not None:
                 regions.append(region)
         return regions
+
+
+@register_table_extractor("mineru25")
+class MinerU25TableExtractor:
+    """Passthrough role so the config can name mineru25 as the table extractor.
+
+    The MinerU segmenter already populates table markdown in each Region, so
+    the pipeline's merge rule keeps the segmenter content and never calls
+    this extractor. It exists to satisfy the registry lookup when the default
+    config wires table_extractor = mineru25.
+    """
+
+    TOOL_NAME = "mineru25"
+
+    @property
+    def tool_name(self) -> str:
+        return self.TOOL_NAME
+
+    def extract(self, region_image, page_number: int) -> ElementContent:
+        return ElementContent()
 
 
 def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:

@@ -47,3 +47,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["extraction/tests"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: heavy end-to-end tests that require MinerU / GPU / extra models",
+]
