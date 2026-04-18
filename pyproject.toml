@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "pillow>=10.0",
+    "pymupdf>=1.23",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,16 @@ dev = [
     "ruff",
     "mypy",
 ]
+gpu = [
+    "mineru>=2.5",
+    "transformers>=4.40",
+    "torch>=2.2",
+    "beautifulsoup4>=4.12",
+]
+
+[tool.setuptools.packages.find]
+include = ["extraction*"]
+exclude = ["outputs*", "_archive*", "embedding*", "indexing*", "tests*", "tasks*"]
 
 [tool.ruff]
 line-length = 88
