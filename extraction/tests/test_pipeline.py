@@ -98,7 +98,11 @@ def test_pipeline_produces_output_files(tmp_path: Path):
     pipeline.run(pdf_path)
 
     assert (output_dir / "content_list.json").exists()
-    assert (output_dir / "document_rich.json").exists()
+    assert not (output_dir / "document_rich.json").exists()
+    # At least one sidecar per page from the mock segmenter
+    assert list((output_dir / "pages" / "0").glob("*_heading.json"))
+    assert list((output_dir / "pages" / "0").glob("*_text.json"))
+    assert list((output_dir / "pages" / "1").glob("*_table.json"))
 
 
 def test_pipeline_elements_in_reading_order(tmp_path: Path):

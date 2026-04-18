@@ -19,11 +19,9 @@ from .interfaces import (
 )
 from .models import (
     ContentList,
-    DocumentRich,
     Element,
     ElementContent,
     ElementType,
-    PageInfo,
     Region,
 )
 from .output import OutputWriter
@@ -124,26 +122,18 @@ class ExtractionPipeline:
         for idx, el in enumerate(elements):
             el.reading_order_index = idx
 
-        # 7. Build output models
-        pages = self._build_page_infos(page_count, elements)
-        content_list = ContentList(
+        # 7. Write per-element sidecars (source of truth)
+        for el in elements:
+            writer.write_element_sidecar(el)
+
+        # 8. Build content_list.json deterministically from the sidecars
+        content_list = writer.build_content_list(
             doc_id=self._make_doc_id(pdf_path),
             source_file=str(pdf_path),
             total_pages=page_count,
             segmentation_tool=self.segmenter.tool_name,
-            pages=pages,
-            elements=elements,
         )
-        document_rich = DocumentRich(
-            doc_id=content_list.doc_id,
-            source_file=str(pdf_path),
-            total_pages=page_count,
-            segmentation_tool=self.segmenter.tool_name,
-        )
-
-        # 8. Write output
         writer.write_content_list(content_list)
-        writer.write_document_rich(document_rich)
 
         return content_list
 
@@ -188,21 +178,6 @@ class ExtractionPipeline:
         if region.region_type == ElementType.FORMULA:
             return self.formula_extractor.tool_name
         return self.figure_descriptor.tool_name
-
-    def _build_page_infos(
-        self, page_count: int, elements: list[Element]
-    ) -> list[PageInfo]:
-        pages: list[PageInfo] = []
-        for p in range(page_count):
-            page_elements = [e.element_id for e in elements if e.page == p]
-            pages.append(
-                PageInfo(
-                    page=p,
-                    image_path=f"pages/{p}/page.png",
-                    element_ids=page_elements,
-                )
-            )
-        return pages
 
     def _make_doc_id(self, pdf_path: Path) -> str:
         h = hashlib.sha256()
