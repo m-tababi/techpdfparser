@@ -15,3 +15,13 @@ try:
     from . import mineru25_segmenter  # noqa: F401
 except ImportError as exc:
     log.debug("mineru25_segmenter not registered: %s", exc)
+
+try:
+    from . import olmocr2_text  # noqa: F401
+except ImportError as exc:
+    log.debug("olmocr2_text not registered: %s", exc)
+
+try:
+    from . import qwen25vl_figure  # noqa: F401
+except ImportError as exc:
+    log.debug("qwen25vl_figure not registered: %s", exc)
