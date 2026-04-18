@@ -103,7 +103,7 @@ def test_crop_from_page_image(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     page_img = Image.new("RGB", (1000, 800), color="white")
     bbox = [100.0, 200.0, 500.0, 400.0]
-    crop = writer.crop_region(page_img, bbox)
+    crop = writer.crop_region(page_img, bbox, dpi=72)
 
     assert crop.size == (400, 200)
 
@@ -193,3 +193,32 @@ def test_build_content_list_from_sidecars_preserves_order(tmp_path: Path) -> Non
     assert cl.pages[0].element_ids == ["a" * 16, "b" * 16]
     assert cl.pages[1].element_ids == ["c" * 16]
     assert cl.pages[0].image_path == "pages/0/page.png"
+
+
+def test_crop_region_scales_points_to_pixels(tmp_path: Path) -> None:
+    writer = OutputWriter(tmp_path)
+    page_img = Image.new("RGB", (1240, 1754), color="white")  # ~A4 at 150 DPI
+    bbox_points = [100.0, 200.0, 200.0, 300.0]
+    crop = writer.crop_region(page_img, bbox_points, dpi=150)
+    # 100 pt * 150/72 = 208.33 → int = 208 (x0); 200 pt * 150/72 = 416.67 → int(+0.999) = 417 (x1)
+    # width = 417 - 208 = 209
+    # 200 pt * 150/72 = 416.67 → int = 416 (y0); 300 pt * 150/72 = 625.0 → int(+0.999) = 625 (y1)
+    # height = 625 - 416 = 209
+    assert crop.size == (209, 209)
+
+
+def test_crop_region_clamps_to_image_bounds(tmp_path: Path) -> None:
+    writer = OutputWriter(tmp_path)
+    page_img = Image.new("RGB", (500, 500), color="white")
+    # bbox extends beyond image in every direction (in pixel space already)
+    bbox_points = [-20.0, -20.0, 10_000.0, 10_000.0]
+    crop = writer.crop_region(page_img, bbox_points, dpi=72)  # scale=1
+    assert crop.size == (500, 500)
+
+
+def test_crop_region_default_dpi_is_72_backwards_compat(tmp_path: Path) -> None:
+    writer = OutputWriter(tmp_path)
+    page_img = Image.new("RGB", (1000, 800), color="white")
+    # No dpi → default 72 → bbox treated as pixels
+    crop = writer.crop_region(page_img, [100.0, 200.0, 500.0, 400.0], dpi=72)
+    assert crop.size == (400, 200)

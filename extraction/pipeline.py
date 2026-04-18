@@ -109,7 +109,7 @@ class ExtractionPipeline:
         # 5. Save visual crops
         for el in elements:
             if el.type in _VISUAL_TYPES and 0 <= el.page < len(page_images):
-                crop = writer.crop_region(page_images[el.page], el.bbox)
+                crop = writer.crop_region(page_images[el.page], el.bbox, dpi=self.dpi)
                 rel_path = writer.save_element_crop(
                     page=el.page,
                     element_id=el.element_id,
@@ -154,17 +154,23 @@ class ExtractionPipeline:
         if region.region_type in _TEXT_TYPES:
             return self.text_extractor.extract(page_img, region.page)
         elif region.region_type == ElementType.TABLE:
-            crop = OutputWriter(self.output_dir).crop_region(page_img, region.bbox)
+            crop = OutputWriter(self.output_dir).crop_region(
+                page_img, region.bbox, dpi=self.dpi
+            )
             return self.table_extractor.extract(crop, region.page)
         elif region.region_type == ElementType.FORMULA:
-            crop = OutputWriter(self.output_dir).crop_region(page_img, region.bbox)
+            crop = OutputWriter(self.output_dir).crop_region(
+                page_img, region.bbox, dpi=self.dpi
+            )
             return self.formula_extractor.extract(crop, region.page)
         elif region.region_type in {
             ElementType.FIGURE,
             ElementType.DIAGRAM,
             ElementType.TECHNICAL_DRAWING,
         }:
-            crop = OutputWriter(self.output_dir).crop_region(page_img, region.bbox)
+            crop = OutputWriter(self.output_dir).crop_region(
+                page_img, region.bbox, dpi=self.dpi
+            )
             description = self.figure_descriptor.describe(crop)
             return ElementContent(description=description)
 

@@ -65,8 +65,17 @@ class OutputWriter:
         image.save(path)
         return path
 
-    def crop_region(self, page_image: Image, bbox: list[float]) -> Image:
-        x0, y0, x1, y1 = [int(v) for v in bbox]
+    def crop_region(
+        self, page_image: Image, bbox: list[float], dpi: int = 72
+    ) -> Image:
+        """Crop a region given in PDF-points from a page image rendered at `dpi`."""
+        scale = dpi / 72.0
+        x0 = max(0, int(bbox[0] * scale))
+        y0 = max(0, int(bbox[1] * scale))
+        x1 = min(page_image.width, int(bbox[2] * scale + 0.999))
+        y1 = min(page_image.height, int(bbox[3] * scale + 0.999))
+        if x1 <= x0 or y1 <= y0:
+            x0, y0, x1, y1 = 0, 0, page_image.width, page_image.height
         return page_image.crop((x0, y0, x1, y1))
 
     def write_element_sidecar(self, element: Element) -> Path:
