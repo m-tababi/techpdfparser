@@ -129,7 +129,7 @@ class ExtractionPipeline:
         # 8. Build content_list.json deterministically from the sidecars
         content_list = writer.build_content_list(
             doc_id=self._make_doc_id(pdf_path),
-            source_file=str(pdf_path),
+            source_file=pdf_path.name,
             total_pages=page_count,
             segmentation_tool=self.segmenter.tool_name,
         )

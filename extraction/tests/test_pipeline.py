@@ -193,3 +193,26 @@ def test_pipeline_text_regions_get_extracted(tmp_path: Path) -> None:
     text_elements = [e for e in data["elements"] if e["type"] == "text"]
     assert len(text_elements) == 1
     assert text_elements[0]["content"]["text"] == "Extracted text from page"
+
+
+def test_pipeline_source_file_is_filename_only(tmp_path: Path) -> None:
+    nested = tmp_path / "deep" / "nested" / "dir"
+    nested.mkdir(parents=True)
+    pdf_path = nested / "report.pdf"
+    pdf_path.write_bytes(b"fake")
+    output_dir = tmp_path / "output"
+
+    pipeline = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=MockSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=output_dir,
+        confidence_threshold=0.3,
+    )
+    pipeline.run(pdf_path)
+
+    data = json.loads((output_dir / "content_list.json").read_text())
+    assert data["source_file"] == "report.pdf"
