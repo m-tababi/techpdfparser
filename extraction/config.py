@@ -18,7 +18,10 @@ class ExtractionConfig(BaseModel):
     segmenter: str = "mineru25"
     text_extractor: str = "olmocr2"
     table_extractor: str = "mineru25"
-    formula_extractor: str = "ppformulanet"
+    # MinerU liefert interline_equation-LaTeX direkt aus middle_json mit.
+    # Ein dedizierter ppformulanet-Port folgt, wenn ein Segmenter ohne LaTeX
+    # hinzukommt oder der OCR-Benchmark ihn fordert.
+    formula_extractor: str = "noop"
     figure_descriptor: str = "qwen25vl"
     output_dir: str = "outputs"
     confidence_threshold: float = 0.3
