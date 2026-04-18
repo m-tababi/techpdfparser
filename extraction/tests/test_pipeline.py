@@ -242,3 +242,50 @@ def test_pipeline_stores_dpi_default_and_override(tmp_path: Path) -> None:
     )
     assert default.dpi == 150
     assert overridden.dpi == 300
+
+
+def test_element_id_is_path_independent(tmp_path: Path) -> None:
+    pdf_a = tmp_path / "a" / "doc.pdf"
+    pdf_b = tmp_path / "b" / "doc.pdf"
+    pdf_a.parent.mkdir(parents=True)
+    pdf_b.parent.mkdir(parents=True)
+    pdf_a.write_bytes(b"identical content")
+    pdf_b.write_bytes(b"identical content")
+
+    def run_one(pdf: Path, out: Path) -> list[str]:
+        ExtractionPipeline(
+            renderer=MockRenderer(),
+            segmenter=MockSegmenter(),
+            text_extractor=MockTextExtractor(),
+            table_extractor=MockTableExtractor(),
+            formula_extractor=MockFormulaExtractor(),
+            figure_descriptor=MockFigureDescriptor(),
+            output_dir=out,
+            confidence_threshold=0.3,
+        ).run(pdf)
+        data = json.loads((out / "content_list.json").read_text())
+        return [e["element_id"] for e in data["elements"]]
+
+    ids_a = run_one(pdf_a, tmp_path / "out_a")
+    ids_b = run_one(pdf_b, tmp_path / "out_b")
+    assert ids_a == ids_b
+
+
+def test_element_id_differs_on_region_type_at_same_bbox(tmp_path: Path) -> None:
+    from extraction.models import Region
+    from extraction.pipeline import ExtractionPipeline as _P
+    pipe = _P(
+        renderer=MockRenderer(),
+        segmenter=MockSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=tmp_path,
+        confidence_threshold=0.3,
+    )
+    r_text = Region(page=0, bbox=[10, 20, 30, 40], region_type=ElementType.TEXT, confidence=1.0)
+    r_head = Region(page=0, bbox=[10, 20, 30, 40], region_type=ElementType.HEADING, confidence=1.0)
+    id1 = pipe._make_element_id("docid", r_text)
+    id2 = pipe._make_element_id("docid", r_head)
+    assert id1 != id2

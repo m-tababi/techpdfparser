@@ -80,6 +80,8 @@ class ExtractionPipeline:
         regions = self.segmenter.segment(pdf_path)
         writer.write_segmentation(regions)
 
+        doc_id = self._make_doc_id(pdf_path)
+
         # 3. Route and extract
         elements: list[Element] = []
         for idx, region in enumerate(regions):
@@ -87,7 +89,7 @@ class ExtractionPipeline:
             if content is None:
                 continue
 
-            element_id = self._make_element_id(pdf_path, region, idx)
+            element_id = self._make_element_id(doc_id, region)
             extractor_name = self._extractor_for(region)
 
             el = Element(
@@ -130,7 +132,7 @@ class ExtractionPipeline:
 
         # 8. Build content_list.json deterministically from the sidecars
         content_list = writer.build_content_list(
-            doc_id=self._make_doc_id(pdf_path),
+            doc_id=doc_id,
             source_file=pdf_path.name,
             total_pages=page_count,
             segmentation_tool=self.segmenter.tool_name,
@@ -194,6 +196,10 @@ class ExtractionPipeline:
                 h.update(chunk)
         return h.hexdigest()[:16]
 
-    def _make_element_id(self, pdf_path: Path, region: Region, seq: int) -> str:
-        raw = f"{pdf_path}:{region.page}:{region.region_type.value}:{seq}"
+    def _make_element_id(self, doc_id: str, region: Region) -> str:
+        x0, y0, x1, y1 = (round(v) for v in region.bbox)
+        raw = (
+            f"{doc_id}:{region.page}:{region.region_type.value}"
+            f":{x0},{y0},{x1},{y1}"
+        )
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
