@@ -93,8 +93,8 @@ class MinerU25Segmenter:
         raw = json.loads(middle_json_path.read_text(encoding="utf-8"))
 
         regions: list[Region] = []
-        for page_number, block in _iter_para_blocks(raw):
-            region = _block_to_region(block, page_number)
+        for page_number, block, layout_dets in _iter_para_blocks(raw):
+            region = _block_to_region(block, page_number, layout_dets)
             if region is not None:
                 regions.append(region)
         return regions
@@ -120,11 +120,33 @@ class MinerU25TableExtractor:
         return ElementContent()
 
 
-def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
+def _confidence_for_block(
+    block: dict[str, Any], layout_dets: list[dict[str, Any]]
+) -> float:
+    block_bbox = _to_bbox(block.get("bbox"))
+    if block_bbox is None:
+        return 1.0
+    target = tuple(round(v) for v in block_bbox)
+    for det in layout_dets:
+        det_bbox = _to_bbox(det.get("bbox"))
+        if det_bbox is None:
+            continue
+        if tuple(round(v) for v in det_bbox) == target:
+            return float(det.get("score", 1.0))
+    return 1.0
+
+
+def _block_to_region(
+    block: dict[str, Any],
+    page_number: int,
+    layout_dets: list[dict[str, Any]],
+) -> Region | None:
     block_type = block.get("type")
     bbox = _to_bbox(block.get("bbox"))
     if bbox is None:
         return None
+
+    confidence = _confidence_for_block(block, layout_dets)
 
     if block_type == _BLOCK_TEXT:
         text = _lines_to_text(block.get("lines", []))
@@ -134,7 +156,7 @@ def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
             page=page_number,
             bbox=bbox,
             region_type=ElementType.TEXT,
-            confidence=1.0,
+            confidence=confidence,
             content=ElementContent(text=text),
         )
 
@@ -146,7 +168,7 @@ def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
             page=page_number,
             bbox=bbox,
             region_type=ElementType.HEADING,
-            confidence=1.0,
+            confidence=confidence,
             content=ElementContent(text=text),
         )
 
@@ -166,7 +188,7 @@ def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
             page=page_number,
             bbox=bbox,
             region_type=ElementType.TABLE,
-            confidence=1.0,
+            confidence=confidence,
             content=content,
         )
 
@@ -179,7 +201,7 @@ def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
             page=page_number,
             bbox=bbox,
             region_type=ElementType.FORMULA,
-            confidence=1.0,
+            confidence=confidence,
             content=ElementContent(latex=latex, text=latex),
         )
 
@@ -197,7 +219,7 @@ def _block_to_region(block: dict[str, Any], page_number: int) -> Region | None:
             page=page_number,
             bbox=bbox,
             region_type=region_kind,
-            confidence=1.0,
+            confidence=confidence,
             content=ElementContent(caption=figure_caption) if figure_caption else None,
         )
 
@@ -212,11 +234,12 @@ def _find_middle_json(output_dir: Path) -> Path:
 
 def _iter_para_blocks(
     raw: dict[str, Any],
-) -> Iterator[tuple[int, dict[str, Any]]]:
+) -> Iterator[tuple[int, dict[str, Any], list[dict[str, Any]]]]:
     for page_idx, page in enumerate(raw.get("pdf_info", [])):
         page_number = int(page.get("page_idx", page_idx))
+        layout_dets = page.get("layout_dets") or []
         for block in page.get("para_blocks") or []:
-            yield page_number, block
+            yield page_number, block, layout_dets
 
 
 def _extract_body_data(para_block: dict[str, Any]) -> tuple[str, str]:
