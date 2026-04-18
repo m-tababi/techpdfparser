@@ -112,6 +112,11 @@ class MinerU25TableExtractor:
 
     TOOL_NAME = "mineru25"
 
+    def __init__(self, **_kwargs: Any) -> None:
+        # Shares the adapters.mineru25 config block with the segmenter;
+        # this passthrough has nothing to configure, so swallow any kwargs.
+        pass
+
     @property
     def tool_name(self) -> str:
         return self.TOOL_NAME
