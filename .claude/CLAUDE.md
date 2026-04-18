@@ -25,6 +25,7 @@ Pointers, not duplicated content:
 - **Registry mechanics:** `extraction/registry.py`
 - **Interfaces (Protocols):** `extraction/interfaces.py`
 - **Output models:** `extraction/models.py`
+- **Output format spec:** @docs/extraction_output.md
 - **Quality gate scope (mypy, ruff):** @pyproject.toml
 
 ## Commands
