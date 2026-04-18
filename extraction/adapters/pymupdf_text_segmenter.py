@@ -44,6 +44,7 @@ class PyMuPDFTextSegmenter:
                     if not text.strip():
                         continue
                     bbox = list(block.get("bbox", [0.0, 0.0, 0.0, 0.0]))
+                    # Rule-based segmenter: no ML score. See docs/writing_adapters.md.
                     regions.append(
                         Region(
                             page=page_idx,
