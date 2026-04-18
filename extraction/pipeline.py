@@ -89,6 +89,8 @@ class ExtractionPipeline:
             content = self._extract_region(region, page_images)
             if content is None:
                 continue
+            if self._is_droppable(region.region_type, content):
+                continue
 
             element_id = self._make_element_id(doc_id, region)
             extractor_name = self._extractor_for(region)
@@ -141,6 +143,16 @@ class ExtractionPipeline:
         writer.write_content_list(content_list)
 
         return content_list
+
+    def _is_droppable(self, region_type: ElementType, content: ElementContent) -> bool:
+        if region_type in _TEXT_TYPES:
+            return not (content.text or "").strip()
+        if region_type == ElementType.TABLE:
+            return not (content.markdown or content.text)
+        if region_type == ElementType.FORMULA:
+            return not (content.latex or content.text)
+        # Visual types: kept as long as pipeline will supply image_path later.
+        return False
 
     def _extract_region(
         self, region: Region, page_images: list[Image]

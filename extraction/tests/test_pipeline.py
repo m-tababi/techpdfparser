@@ -345,3 +345,89 @@ def test_pipeline_allows_empty_output_dir(tmp_path: Path) -> None:
     out.mkdir()
     _make_pipeline(out).run(pdf_path)  # must not raise
     assert (out / "content_list.json").exists()
+
+
+class EmptyTextSegmenter:
+    """Emits text regions with empty content and a figure with only bbox."""
+    tool_name = "empty_seg"
+
+    def segment(self, pdf_path: Path) -> list[Region]:
+        return [
+            Region(
+                page=0, bbox=[0, 0, 100, 50],
+                region_type=ElementType.TEXT, confidence=0.9,
+                content=ElementContent(text="   "),
+            ),
+            Region(
+                page=0, bbox=[0, 60, 100, 200],
+                region_type=ElementType.TEXT, confidence=0.9,
+                content=ElementContent(text=""),
+            ),
+            Region(
+                page=0, bbox=[0, 220, 100, 300],
+                region_type=ElementType.FIGURE, confidence=0.9,
+                content=None,
+            ),
+        ]
+
+
+class EmptyTableSegmenter:
+    tool_name = "empty_seg"
+
+    def segment(self, pdf_path: Path) -> list[Region]:
+        return [
+            Region(
+                page=0, bbox=[0, 0, 100, 50],
+                region_type=ElementType.TABLE, confidence=0.9,
+                content=ElementContent(),
+            ),
+        ]
+
+
+def test_pipeline_drops_empty_text(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    pipe = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=EmptyTextSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=out,
+        confidence_threshold=0.3,
+    )
+    pipe.run(pdf_path)
+    data = json.loads((out / "content_list.json").read_text())
+    types = sorted(e["type"] for e in data["elements"])
+    # Under the current (pre-Task 8) merge rule the segmenter's empty content
+    # flows through unchanged. _is_droppable must remove both empty-text
+    # regions; the figure survives because the descriptor gives it a non-empty
+    # description. Task 8 Step 5 revisits this test when the merge rule flips.
+    assert types == ["figure"]
+
+
+def test_pipeline_drops_table_without_markdown_or_text(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+
+    class NoopTable:
+        tool_name = "empty_seg"
+        def extract(self, region_image, page_number):
+            return ElementContent()
+
+    pipe = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=EmptyTableSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=NoopTable(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=out,
+        confidence_threshold=0.3,
+    )
+    pipe.run(pdf_path)
+    data = json.loads((out / "content_list.json").read_text())
+    assert not any(e["type"] == "table" for e in data["elements"])
