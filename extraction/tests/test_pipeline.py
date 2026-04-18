@@ -392,6 +392,11 @@ class EmptyTableSegmenter:
         ]
 
 
+class _EmptyTextExtractor:
+    tool_name = "empty_seg"
+    def extract(self, page_image, page_number):
+        return ElementContent(text="")
+
 def test_pipeline_drops_empty_text(tmp_path: Path) -> None:
     pdf_path = tmp_path / "doc.pdf"
     pdf_path.write_bytes(b"fake")
@@ -399,7 +404,7 @@ def test_pipeline_drops_empty_text(tmp_path: Path) -> None:
     pipe = ExtractionPipeline(
         renderer=MockRenderer(),
         segmenter=EmptyTextSegmenter(),
-        text_extractor=MockTextExtractor(),
+        text_extractor=_EmptyTextExtractor(),
         table_extractor=MockTableExtractor(),
         formula_extractor=MockFormulaExtractor(),
         figure_descriptor=MockFigureDescriptor(),
@@ -408,12 +413,8 @@ def test_pipeline_drops_empty_text(tmp_path: Path) -> None:
     )
     pipe.run(pdf_path)
     data = json.loads((out / "content_list.json").read_text())
-    types = sorted(e["type"] for e in data["elements"])
-    # Under the current (pre-Task 8) merge rule the segmenter's empty content
-    # flows through unchanged. _is_droppable must remove both empty-text
-    # regions; the figure survives because the descriptor gives it a non-empty
-    # description. Task 8 Step 5 revisits this test when the merge rule flips.
-    assert types == ["figure"]
+    types = [e["type"] for e in data["elements"]]
+    assert types == ["figure"]  # only the figure survives; both empty texts dropped
 
 
 def test_pipeline_drops_table_without_markdown_or_text(tmp_path: Path) -> None:
@@ -474,6 +475,123 @@ def test_pipeline_keeps_visual_with_only_image_path(tmp_path: Path) -> None:
     content = data["elements"][0]["content"]
     assert "image_path" in content
     assert content["image_path"]
+
+
+class _TableSegSameName:
+    """Segmenter that names itself 'shared' and provides table content."""
+    tool_name = "shared"
+
+    def segment(self, pdf_path: Path) -> list[Region]:
+        return [
+            Region(
+                page=0, bbox=[10, 10, 100, 100],
+                region_type=ElementType.TABLE, confidence=0.95,
+                content=ElementContent(markdown="SEG-MD", text="seg text", caption="Table 1"),
+            ),
+        ]
+
+
+class _TableExtractorSameName:
+    """Table extractor that names itself 'shared' and should NOT be called."""
+    tool_name = "shared"
+    def __init__(self):
+        self.called = False
+    def extract(self, region_image, page_number):
+        self.called = True
+        return ElementContent(markdown="EXT-MD", text="ext text")
+
+
+class _TableExtractorOther:
+    tool_name = "other"
+    def __init__(self):
+        self.called = False
+    def extract(self, region_image, page_number):
+        self.called = True
+        return ElementContent(markdown="EXT-MD", text="ext text")
+
+
+def test_merge_tool_match_reuses_segmenter_content(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    table_ext = _TableExtractorSameName()
+    pipe = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=_TableSegSameName(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=table_ext,
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=out,
+        confidence_threshold=0.3,
+    )
+    pipe.run(pdf_path)
+    data = json.loads((out / "content_list.json").read_text())
+    table = next(e for e in data["elements"] if e["type"] == "table")
+    assert table["content"]["markdown"] == "SEG-MD"
+    assert table["content"]["caption"] == "Table 1"
+    assert table["extractor"] == "shared"
+    assert table_ext.called is False
+
+
+def test_merge_tool_mismatch_runs_role_tool_and_discards_segmenter_content(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    table_ext = _TableExtractorOther()
+    pipe = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=_TableSegSameName(),  # "shared"
+        text_extractor=MockTextExtractor(),
+        table_extractor=table_ext,  # "other"
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),
+        output_dir=out,
+        confidence_threshold=0.3,
+    )
+    pipe.run(pdf_path)
+    data = json.loads((out / "content_list.json").read_text())
+    table = next(e for e in data["elements"] if e["type"] == "table")
+    assert table["content"]["markdown"] == "EXT-MD"
+    # Caption always from segmenter
+    assert table["content"]["caption"] == "Table 1"
+    assert table["extractor"] == "other"
+    assert table_ext.called is True
+
+
+class _FigureCaptionSegmenter:
+    tool_name = "figseg"
+
+    def segment(self, pdf_path: Path) -> list[Region]:
+        return [
+            Region(
+                page=0, bbox=[0, 0, 200, 200],
+                region_type=ElementType.FIGURE, confidence=0.9,
+                content=ElementContent(caption="Fig. 1: The widget"),
+            ),
+        ]
+
+
+def test_merge_figure_keeps_segmenter_caption_and_descriptor_description(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(b"fake")
+    out = tmp_path / "out"
+    pipe = ExtractionPipeline(
+        renderer=MockRenderer(),
+        segmenter=_FigureCaptionSegmenter(),
+        text_extractor=MockTextExtractor(),
+        table_extractor=MockTableExtractor(),
+        formula_extractor=MockFormulaExtractor(),
+        figure_descriptor=MockFigureDescriptor(),  # returns "A test figure"
+        output_dir=out,
+        confidence_threshold=0.3,
+    )
+    pipe.run(pdf_path)
+    data = json.loads((out / "content_list.json").read_text())
+    fig = next(e for e in data["elements"] if e["type"] == "figure")
+    assert fig["content"]["caption"] == "Fig. 1: The widget"
+    assert fig["content"]["description"] == "A test figure"
+    assert fig["extractor"] == "mock_fig"
 
 
 def test_pipeline_drops_visual_without_image_path_or_description(tmp_path: Path) -> None:

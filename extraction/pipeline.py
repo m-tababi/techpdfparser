@@ -93,7 +93,7 @@ class ExtractionPipeline:
                 continue
 
             element_id = self._make_element_id(doc_id, region)
-            extractor_name = self._extractor_for(region)
+            extractor_name = self._role_tool_name(region.region_type)
 
             el = Element(
                 element_id=element_id,
@@ -165,48 +165,50 @@ class ExtractionPipeline:
     def _extract_region(
         self, region: Region, page_images: list[Image]
     ) -> ElementContent | None:
-        # If segmenter already extracted content, use it
-        if region.content is not None:
-            return region.content
-
         if region.page < 0 or region.page >= len(page_images):
             return None
 
-        page_img = page_images[region.page]
+        role_tool_name = self._role_tool_name(region.region_type)
+        segmenter_content = region.content
 
+        tool_match = (
+            role_tool_name == self.segmenter.tool_name
+            and segmenter_content is not None
+        )
+        if tool_match:
+            assert segmenter_content is not None
+            content = segmenter_content.model_copy()
+        else:
+            content = self._run_role_tool(region, page_images)
+
+        # Layout (caption) always from segmenter
+        if segmenter_content and segmenter_content.caption:
+            content.caption = segmenter_content.caption
+
+        return content
+
+    def _run_role_tool(
+        self, region: Region, page_images: list[Image]
+    ) -> ElementContent:
+        page_img = page_images[region.page]
         if region.region_type in _TEXT_TYPES:
             return self.text_extractor.extract(page_img, region.page)
-        elif region.region_type == ElementType.TABLE:
-            crop = OutputWriter(self.output_dir).crop_region(
-                page_img, region.bbox, dpi=self.dpi
-            )
-            return self.table_extractor.extract(crop, region.page)
-        elif region.region_type == ElementType.FORMULA:
-            crop = OutputWriter(self.output_dir).crop_region(
-                page_img, region.bbox, dpi=self.dpi
-            )
-            return self.formula_extractor.extract(crop, region.page)
-        elif region.region_type in {
-            ElementType.FIGURE,
-            ElementType.DIAGRAM,
-            ElementType.TECHNICAL_DRAWING,
-        }:
-            crop = OutputWriter(self.output_dir).crop_region(
-                page_img, region.bbox, dpi=self.dpi
-            )
-            description = self.figure_descriptor.describe(crop)
-            return ElementContent(description=description)
-
-        return None
-
-    def _extractor_for(self, region: Region) -> str:
-        if region.content is not None:
-            return self.segmenter.tool_name
-        if region.region_type in _TEXT_TYPES:
-            return self.text_extractor.tool_name
+        writer = OutputWriter(self.output_dir)
+        crop = writer.crop_region(page_img, region.bbox, dpi=self.dpi)
         if region.region_type == ElementType.TABLE:
-            return self.table_extractor.tool_name
+            return self.table_extractor.extract(crop, region.page)
         if region.region_type == ElementType.FORMULA:
+            return self.formula_extractor.extract(crop, region.page)
+        # Visual types
+        description = self.figure_descriptor.describe(crop)
+        return ElementContent(description=description)
+
+    def _role_tool_name(self, region_type: ElementType) -> str:
+        if region_type in _TEXT_TYPES:
+            return self.text_extractor.tool_name
+        if region_type == ElementType.TABLE:
+            return self.table_extractor.tool_name
+        if region_type == ElementType.FORMULA:
             return self.formula_extractor.tool_name
         return self.figure_descriptor.tool_name
 
