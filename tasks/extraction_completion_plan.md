@@ -1,3 +1,8 @@
+> **ARCHIVED — 2026-04-18.** References the pre-refactor `src/…` layout.
+> Current extraction lives under `extraction/`. Kept for history only.
+> See `docs/extraction_output.md` and
+> `docs/superpowers/specs/2026-04-18-extraction-hardening-design.md`.
+
 # Plan: Extraktion + Speicherung auf Projekt.md-Niveau bringen
 
 > **Status: Vollständig umgesetzt.** Dieser Plan ist archiviert.

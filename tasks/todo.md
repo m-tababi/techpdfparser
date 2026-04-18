@@ -1,3 +1,8 @@
+> **ARCHIVED — 2026-04-18.** References the pre-refactor `src/…` layout.
+> Current extraction lives under `extraction/`. Kept for history only.
+> See `docs/extraction_output.md` and
+> `docs/superpowers/specs/2026-04-18-extraction-hardening-design.md`.
+
 # Todo — Multi-Pipeline PDF Intelligence System
 
 ## Phase 1 — Architecture Skeleton (current)
