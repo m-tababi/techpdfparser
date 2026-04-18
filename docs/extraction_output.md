@@ -148,30 +148,46 @@ direkt), steht dieser hier mit drin — genau so wie die Pipeline ihn übernimmt
 
 ## Merge-Regeln
 
-Die Pipeline entscheidet pro Region, ob der Content vom Segmenter kommt oder ob ein
-dedizierter Extractor über den Crop läuft:
+Die Pipeline entscheidet pro Region **nicht selbst**, welches Tool den Content
+liefert. Die Config weist jedem Role (text, table, formula, figure) genau ein
+Tool zu. Die Pipeline gehorcht.
 
-1. **Segmenter-Content gewinnt**, wenn der Segmenter Content für die Region mitbringt
-   und als Adapter für den Element-Typ konfiguriert ist. Beispiel: `mineru25` ist der
-   Segmenter und in der Config als `table_extractor: mineru25` gesetzt → MinerU-Markdown
-   wird direkt übernommen.
-2. **Sonst läuft der konfigurierte Extractor** über den Crop:
-   - `text` / `heading` → `TextExtractor.extract(page_image, page_number)`
-   - `table` → `TableExtractor.extract(region_crop, page_number)`
-   - `formula` → `FormulaExtractor.extract(region_crop, page_number)`
-   - `figure` / `diagram` / `technical_drawing` → `FigureDescriptor.describe(region_crop)`
+Datenquellen pro Feld:
 
-Aus `output_format_design.md` (Empfehlung, nicht im Code verdrahtet):
+| Feld                                       | Quelle                  |
+|--------------------------------------------|-------------------------|
+| `bbox`, `page`, `type`, `reading_order`    | Segmenter               |
+| `caption`                                  | Segmenter (Layout)      |
+| `image_path`                               | Pipeline (aus dem Crop) |
+| `text`                                     | `text_extractor`        |
+| `markdown`                                 | `table_extractor`       |
+| `latex`                                    | `formula_extractor`     |
+| `description`                              | `figure_descriptor`     |
 
-> Tabellen: MinerU gewinnt immer.
-> Text: OlmOCR.
-> Formeln: PPFormulaNet (oder MinerU-LaTeX als Fallback).
->
-> Reading Order muss nach dem Merge erhalten bleiben — semantischer Zusammenhang
-> zwischen benachbarten Elementen (Text → Tabelle → Text) darf nicht verloren gehen.
+Ablauf pro Region:
 
-Welcher Adapter pro Typ läuft, kontrolliert die YAML-Config (siehe
-`extraction/config.py` für Feldnamen und Defaults).
+1. Pipeline bestimmt das Role-Tool für den Region-Typ aus der Config.
+2. Wenn `role_tool.tool_name == segmenter.tool_name`: Pipeline übernimmt
+   `region.content` (Tool-Match-Optimierung — gleiches Tool, kein Re-Run nötig).
+   Sonst: Pipeline cropped das Seitenbild und ruft das Role-Tool.
+3. `caption` aus dem Segmenter bleibt in jedem Fall erhalten.
+4. Ein Role-Tool-Output mit leerem Pflichtfeld (leerer Text, kein
+   Markdown/Text bei Tabellen, kein LaTeX/Text bei Formeln) wird als
+   „keine Daten" gewertet und das Element gedroppt. Visuelle Elemente
+   dürfen persistieren, solange ein `image_path` vorhanden ist.
+
+Beispiele:
+
+| Config                                           | Verhalten                                                                                 |
+|--------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `segmenter: mineru25`, `table_extractor: mineru25` | Tool-Match — MinerUs internes Markdown wird direkt übernommen.                          |
+| `segmenter: mineru25`, `table_extractor: anderes` | Crop wird durch `anderes` geschickt, MinerUs Markdown verworfen. Caption bleibt erhalten. |
+| `segmenter: mineru25`, `figure_descriptor: noop` | Figure-Element hat `caption` aus dem Segmenter, aber keine `description`.               |
+
+Welche Tool-Kombination pro Role optimal ist, wird durch Benchmarks
+entschieden (siehe `backlog.md` → „Per-role extractor benchmark"), nicht durch
+Pipeline-Heuristik. Der Default `table_extractor: mineru25` nutzt die
+Tool-Match-Optimierung — das ist Effizienz, kein Design-Constraint.
 
 ## Reading Order
 
@@ -184,11 +200,30 @@ Welcher Adapter pro Typ läuft, kontrolliert die YAML-Config (siehe
 - Tie-Breaker bei gleicher `(page, reading_order_index)` in der Merge-Sicht:
   lexikografische Sortierung der `element_id`.
 
+## Koordinatensystem
+
+`bbox` in jedem `Region` und jedem `Element` ist in **PDF-Points**, Origin
+oben-links, DPI-unabhängig. Beide mitgelieferten Segmenter (MinerU 2.5 via
+`middle_json`, PyMuPDF via `get_text("dict")`) liefern bereits in Points.
+
+Die Pipeline skaliert bbox nur beim Cropping auf das gerenderte Seitenbild:
+`scale = dpi / 72`. Passiert an genau einer Stelle (`OutputWriter.crop_region`).
+Negative Werte und Überläufe werden auf Bildgrenzen geklemmt, damit ein leicht
+überschießendes bbox keinen kaputten Crop erzeugt.
+
+Vorteil: Segmenter bleibt DPI-agnostisch. Wenn später mit anderer DPI
+re-rendert wird, braucht weder Segmenter noch Output-Format geändert werden —
+nur der eine Skalierungsschritt.
+
 ## IDs
 
 - `doc_id`: SHA-256 des PDF-Inhalts, auf 16 Hex-Zeichen gekürzt.
-- `element_id`: SHA-256 über `"<pdf_path>:<page>:<region_type>:<seq>"`, auf 16
-  Hex-Zeichen gekürzt. Deterministisch — derselbe PDF produziert dieselben IDs.
+- `element_id`: SHA-256 über
+  `"<doc_id>:<page>:<region_type>:<round(x0)>,<round(y0)>,<round(x1)>,<round(y1)>"`,
+  auf 16 Hex-Zeichen gekürzt. Pfadunabhängig: derselbe PDF-Inhalt liefert
+  überall dieselben IDs. Bbox-basiert statt sequenzbasiert — stabil, auch
+  wenn ein ML-Segmenter die Regionen nicht exakt in derselben Reihenfolge
+  liefert.
 
 ## Was Phase 2 bringt (nicht in dieser Iteration)
 
@@ -204,3 +239,8 @@ Diese Felder und Artefakte sind bewusst aus Phase 1 ausgenommen und folgen spät
 
 Der ganze Phase-2-Teil ist nachgelagert **berechenbar** aus dem Phase-1-Output — es
 braucht kein erneutes PDF-Parsing.
+
+Sobald `document_rich.json` in Phase 2 produziert wird, wird der
+Output-Isolation-Fail-Safe in `Pipeline.run()` es als geprüftes Artefakt
+aufnehmen — mit genau derselben Semantik wie `content_list.json` und
+`segmentation.json`.
