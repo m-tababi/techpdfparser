@@ -44,6 +44,14 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _resolve_renderer_dpi(cfg: ExtractionConfig) -> int:
+    """Top-level cfg.dpi unless the renderer adapter block overrides it."""
+    adapter_cfg = cfg.get_adapter_config(cfg.renderer)
+    if "dpi" in adapter_cfg:
+        return int(adapter_cfg["dpi"])
+    return int(cfg.dpi)
+
+
 def _load_cfg(config_path: Path | None) -> ExtractionConfig:
     if config_path is not None:
         return load_extraction_config(config_path)
@@ -60,7 +68,10 @@ def _run_extract(pdf_path: Path, cfg: ExtractionConfig, output_dir: Path | None)
 
     out = output_dir or Path(cfg.output_dir)
 
-    renderer = get_renderer(cfg.renderer, **cfg.get_adapter_config(cfg.renderer))
+    renderer_kwargs = dict(cfg.get_adapter_config(cfg.renderer))
+    renderer_kwargs.setdefault("dpi", cfg.dpi)
+    renderer = get_renderer(cfg.renderer, **renderer_kwargs)
+    dpi = _resolve_renderer_dpi(cfg)
     segmenter = get_segmenter(cfg.segmenter, **cfg.get_adapter_config(cfg.segmenter))
     text_extractor = get_text_extractor(
         cfg.text_extractor, **cfg.get_adapter_config(cfg.text_extractor)
@@ -84,6 +95,7 @@ def _run_extract(pdf_path: Path, cfg: ExtractionConfig, output_dir: Path | None)
         figure_descriptor=figure_descriptor,
         output_dir=out,
         confidence_threshold=cfg.confidence_threshold,
+        dpi=dpi,
     )
 
     print(f"Extracting {pdf_path.name}...")

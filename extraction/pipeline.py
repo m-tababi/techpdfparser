@@ -52,6 +52,7 @@ class ExtractionPipeline:
         figure_descriptor: FigureDescriptor,
         output_dir: Path,
         confidence_threshold: float = 0.3,
+        dpi: int = 150,
     ) -> None:
         self.renderer = renderer
         self.segmenter = segmenter
@@ -61,6 +62,7 @@ class ExtractionPipeline:
         self.figure_descriptor = figure_descriptor
         self.output_dir = Path(output_dir)
         self.confidence_threshold = confidence_threshold
+        self.dpi = dpi
 
     def run(self, pdf_path: Path) -> ContentList:
         """Run the full extraction pipeline on a single PDF."""
