@@ -86,7 +86,7 @@ class ExtractionPipeline:
         # 3. Route and extract
         elements: list[Element] = []
         for idx, region in enumerate(regions):
-            content = self._extract_region(region, page_images)
+            content = self._extract_region(region, page_images, writer)
             if content is None:
                 continue
             if self._is_droppable(region.region_type, content):
@@ -133,15 +133,11 @@ class ExtractionPipeline:
             or (e.content.description or "").strip()
         ]
 
-        # 6. Reassign reading order after filtering
-        for idx, el in enumerate(elements):
-            el.reading_order_index = idx
-
-        # 7. Write per-element sidecars (source of truth)
+        # 6. Write per-element sidecars (source of truth)
         for el in elements:
             writer.write_element_sidecar(el)
 
-        # 8. Build content_list.json deterministically from the sidecars
+        # 7. Build content_list.json deterministically from the sidecars
         content_list = writer.build_content_list(
             doc_id=doc_id,
             source_file=pdf_path.name,
@@ -163,7 +159,10 @@ class ExtractionPipeline:
         return False
 
     def _extract_region(
-        self, region: Region, page_images: list[Image]
+        self,
+        region: Region,
+        page_images: list[Image],
+        writer: OutputWriter,
     ) -> ElementContent | None:
         if region.page < 0 or region.page >= len(page_images):
             return None
@@ -179,7 +178,7 @@ class ExtractionPipeline:
             assert segmenter_content is not None
             content = segmenter_content.model_copy()
         else:
-            content = self._run_role_tool(region, page_images)
+            content = self._run_role_tool(region, page_images, writer)
 
         # Layout (caption) always from segmenter
         if segmenter_content and segmenter_content.caption:
@@ -188,12 +187,14 @@ class ExtractionPipeline:
         return content
 
     def _run_role_tool(
-        self, region: Region, page_images: list[Image]
+        self,
+        region: Region,
+        page_images: list[Image],
+        writer: OutputWriter,
     ) -> ElementContent:
         page_img = page_images[region.page]
         if region.region_type in _TEXT_TYPES:
             return self.text_extractor.extract(page_img, region.page)
-        writer = OutputWriter(self.output_dir)
         crop = writer.crop_region(page_img, region.bbox, dpi=self.dpi)
         if region.region_type == ElementType.TABLE:
             return self.table_extractor.extract(crop, region.page)
