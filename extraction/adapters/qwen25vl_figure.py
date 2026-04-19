@@ -11,8 +11,8 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from .._runtime import is_cuda_oom, release_runtime_resources
 from ..registry import register_figure_descriptor
-from ._runtime import is_cuda_oom, release_runtime_resources
 
 if TYPE_CHECKING:
     from PIL.Image import Image

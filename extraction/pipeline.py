@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PIL.Image import Image
 
+from ._runtime import release_runtime_resources
 from .interfaces import (
     FigureDescriptor,
     FormulaExtractor,
@@ -77,16 +78,21 @@ class ExtractionPipeline:
             writer.save_page_image(page=i, image=img)
             page_images.append(img)
 
-        # 2. Segment
+        # 2. Segment — release the segmenter's GPU state before extractors load
         regions = self.segmenter.segment(pdf_path)
         writer.write_segmentation(regions)
+        release_runtime_resources(self.segmenter)
 
         doc_id = self._make_doc_id(pdf_path)
 
-        # 3. Route and extract
+        # 3. Extract per role, releasing GPU state between roles so only one
+        # heavy VLM/OCR model is resident at a time.
+        contents = self._extract_by_role(regions, page_images, writer)
+
+        # 4. Assemble elements in reading order
         elements: list[Element] = []
         for idx, region in enumerate(regions):
-            content = self._extract_region(region, page_images, writer)
+            content = contents.get(idx)
             if content is None:
                 continue
             if self._is_droppable(region.region_type, content):
@@ -108,10 +114,10 @@ class ExtractionPipeline:
             )
             elements.append(el)
 
-        # 4. Confidence filter
+        # 5. Confidence filter
         elements = [e for e in elements if e.confidence >= self.confidence_threshold]
 
-        # 5. Save visual crops
+        # 6. Save visual crops
         for el in elements:
             if el.type in _VISUAL_TYPES and 0 <= el.page < len(page_images):
                 crop = writer.crop_region(page_images[el.page], el.bbox, dpi=self.dpi)
@@ -125,7 +131,7 @@ class ExtractionPipeline:
                     rel_path.relative_to(self.output_dir)
                 )
 
-        # 5b. Drop visuals that ended up with neither image_path nor description.
+        # 6b. Drop visuals that ended up with neither image_path nor description.
         elements = [
             e for e in elements
             if e.type not in _VISUAL_TYPES
@@ -133,11 +139,11 @@ class ExtractionPipeline:
             or (e.content.description or "").strip()
         ]
 
-        # 6. Write per-element sidecars (source of truth)
+        # 7. Write per-element sidecars (source of truth)
         for el in elements:
             writer.write_element_sidecar(el)
 
-        # 7. Build content_list.json deterministically from the sidecars
+        # 8. Build content_list.json deterministically from the sidecars
         content_list = writer.build_content_list(
             doc_id=doc_id,
             source_file=pdf_path.name,
@@ -147,6 +153,49 @@ class ExtractionPipeline:
         writer.write_content_list(content_list)
 
         return content_list
+
+    def _extract_by_role(
+        self,
+        regions: list[Region],
+        page_images: list[Image],
+        writer: OutputWriter,
+    ) -> dict[int, ElementContent]:
+        """Extract content role-by-role, releasing GPU state after each role.
+
+        Keeps at most one heavy VLM/OCR model resident at a time, so
+        olmOCR-2 and Qwen2.5-VL can share a 24 GB GPU without fighting.
+        Reading order is preserved because each region is keyed by its
+        original index in ``regions``.
+        """
+        text_idx: list[int] = []
+        table_idx: list[int] = []
+        formula_idx: list[int] = []
+        visual_idx: list[int] = []
+        for idx, region in enumerate(regions):
+            if region.page < 0 or region.page >= len(page_images):
+                continue
+            if region.region_type in _TEXT_TYPES:
+                text_idx.append(idx)
+            elif region.region_type == ElementType.TABLE:
+                table_idx.append(idx)
+            elif region.region_type == ElementType.FORMULA:
+                formula_idx.append(idx)
+            elif region.region_type in _VISUAL_TYPES:
+                visual_idx.append(idx)
+
+        contents: dict[int, ElementContent] = {}
+        for role_indices, role_tool in (
+            (text_idx, self.text_extractor),
+            (table_idx, self.table_extractor),
+            (formula_idx, self.formula_extractor),
+            (visual_idx, self.figure_descriptor),
+        ):
+            for idx in role_indices:
+                content = self._extract_region(regions[idx], page_images, writer)
+                if content is not None:
+                    contents[idx] = content
+            release_runtime_resources(role_tool)
+        return contents
 
     def _is_droppable(self, region_type: ElementType, content: ElementContent) -> bool:
         if region_type in _TEXT_TYPES:

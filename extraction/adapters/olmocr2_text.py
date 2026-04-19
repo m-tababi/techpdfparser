@@ -17,9 +17,9 @@ from typing import Any
 
 from PIL import Image as PILImage
 
+from .._runtime import is_cuda_oom, release_runtime_resources
 from ..models import ElementContent
 from ..registry import register_text_extractor
-from ._runtime import is_cuda_oom, release_runtime_resources
 
 _OLMOCR_PROMPT = (
     "Attached is one page of a document that you must process. "
