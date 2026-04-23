@@ -18,15 +18,37 @@ PyTorch: CUDA builds depend on your system. Follow
 https://pytorch.org/get-started/locally/ and install a matching
 `torch` wheel before or alongside `-e .[gpu]`.
 
-## CLI
+## Extraction-Pipeline
 
-Extract a PDF:
+Die Extraktion läuft in vier manuellen Schritten. Jedes Kommando lädt
+das zugehörige Modell, verarbeitet alle genannten PDFs/Ordner, und
+beendet sich (gibt die GPU wieder frei). Am Ende jedes Schritts wird
+der nächste Befehl zum Kopieren ausgegeben.
 
-    python -m extraction extract path/to/document.pdf --config config.yaml --output outputs/run1/
+### 1. Segmentieren (MinerU)
 
-Rebuild `content_list.json` from existing sidecars (no re-extraction):
+Input: PDF-Pfade. Legt Output-Ordner automatisch unter `outputs/` an.
 
-    python -m extraction rebuild outputs/run1/
+    python -m extraction segment <pdf1> <pdf2> ...
+
+### 2. Text extrahieren (olmOCR-2)
+
+    python -m extraction extract-text <outdir1> <outdir2> ...
+
+### 3. Figures beschreiben (Qwen2.5-VL)
+
+    python -m extraction describe-figures <outdir1> <outdir2> ...
+
+### 4. Zusammenbauen (CPU, kein Modell)
+
+    python -m extraction assemble <outdir1> <outdir2> ...
+
+### Einzelnen Schritt neu laufen lassen
+
+Marker löschen und Stage neu starten, z.B. Text-Extraktion für ein PDF:
+
+    rm outputs/jmmp-09-00199-v2/.stages/extract-text.done
+    python -m extraction extract-text outputs/jmmp-09-00199-v2
 
 ## CPU-only config example
 
