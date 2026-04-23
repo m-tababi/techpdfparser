@@ -43,18 +43,30 @@ def run_segment(
     output_base: Path,
 ) -> int:
     plan: list[tuple[Path, Path, OutputWriter]] = []
-    skipped: list[StageOutcome] = []
+    outcomes: list[StageOutcome] = []
     for pdf in pdf_paths:
         out_dir = output_base / pdf.stem
+        pre_existed = out_dir.exists() and any(out_dir.iterdir())
         writer = OutputWriter(out_dir)
         label = str(out_dir)
         if writer.is_stage_done(_STAGE):
-            skipped.append(StageOutcome(label=label, status="skipped"))
+            outcomes.append(StageOutcome(label=label, status="skipped"))
             print(f"Processing {label} ... ↷ skipped (already done)")
             continue
+        if pre_existed:
+            exc = FileExistsError(
+                f"Output directory '{out_dir}' already contains artefacts but "
+                f"'.stages/{_STAGE}.done' is missing. Delete the directory or "
+                f"its orphaned contents before re-running segment."
+            )
+            writer.write_stage_error(_STAGE, exc)
+            outcomes.append(StageOutcome(
+                label=label, status="error",
+                detail=f"(Ordner nicht leer, kein segment.done; siehe .stages/{_STAGE}.error)",
+            ))
+            print(f"Processing {label} ... ✗ dirty output directory without segment.done")
+            continue
         plan.append((pdf, out_dir, writer))
-
-    outcomes: list[StageOutcome] = list(skipped)
 
     if not plan:
         ok_out_dirs = [output_base / p.stem for p in pdf_paths]

@@ -128,6 +128,31 @@ class _BrokenSegmenter:
         raise RuntimeError("segmenter blew up")
 
 
+def test_segment_dirty_output_dir_without_done_marker_errors(tmp_path: Path, monkeypatch):
+    """Pre-existing artefacts without segment.done means a crashed prior run.
+    Stage must refuse to re-process and write .error, not silently overwrite."""
+    pdf = tmp_path / "sample.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
+    out_dir = tmp_path / "outputs" / "sample"
+    (out_dir / "pages" / "0").mkdir(parents=True)
+    (out_dir / "pages" / "0" / "page.png").write_bytes(b"")
+    (out_dir / "segmentation.json").write_text("{}", encoding="utf-8")
+    cfg = _make_cfg()
+
+    from extraction.stages import segment as seg_mod
+
+    def _boom(*a, **kw):
+        raise AssertionError("segmenter must not be loaded when output dir is dirty")
+    monkeypatch.setattr(seg_mod, "get_segmenter", _boom)
+
+    exit_code = run_segment([pdf], cfg, output_base=tmp_path / "outputs")
+    assert exit_code == 1
+    err = out_dir / ".stages" / "segment.error"
+    assert err.exists()
+    assert "already contains artefacts" in err.read_text(encoding="utf-8")
+    assert not (out_dir / ".stages" / "segment.done").exists()
+
+
 def test_segment_error_writes_marker_and_continues(tmp_path: Path):
     pdf_ok = tmp_path / "good.pdf"
     pdf_ok.write_bytes(b"%PDF-1.4\n")
