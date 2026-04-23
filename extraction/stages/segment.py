@@ -61,7 +61,7 @@ def run_segment(
         return print_stage_summary(_STAGE, outcomes, ok_out_dirs)
 
     renderer_kwargs = dict(cfg.get_adapter_config(cfg.renderer))
-    renderer_kwargs.setdefault("dpi", cfg.dpi)
+    renderer_kwargs["dpi"] = cfg.resolve_renderer_dpi()
     renderer = get_renderer(cfg.renderer, **renderer_kwargs)
     segmenter = get_segmenter(cfg.segmenter, **cfg.get_adapter_config(cfg.segmenter))
 
@@ -140,7 +140,7 @@ def _process_one(
             ElementType.TABLE, ElementType.FORMULA, ElementType.FIGURE,
             ElementType.DIAGRAM, ElementType.TECHNICAL_DRAWING,
         } and 0 <= region.page < len(page_images):
-            crop = writer.crop_region(page_images[region.page], region.bbox, dpi=cfg.dpi)
+            crop = writer.crop_region(page_images[region.page], region.bbox, dpi=cfg.resolve_renderer_dpi())
             rel = writer.save_element_crop(
                 page=region.page, element_id=el_id,
                 element_type=region.region_type.value, image=crop,
