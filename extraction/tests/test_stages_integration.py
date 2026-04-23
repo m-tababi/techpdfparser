@@ -1,20 +1,24 @@
-"""End-to-end integration test — all four stages on a real PDF.
+"""End-to-end integration test — all four stages as real CLI subprocesses.
 
 Marked integration: requires GPU + real model weights. Run with:
     pytest -m integration extraction/tests/test_stages_integration.py
+
+Why subprocess, not in-process: each stage is meant to run in its own OS
+process so the kernel releases GPU memory between stages. Invoking the
+four run_* functions in one pytest process would keep MinerU + olmOCR-2
++ Qwen2.5-VL resident simultaneously and OOM on anything short of a ~40
+GB GPU. The test mirrors the real usage — `python -m extraction <stage>`
+per stage — which is both more honest and physically runnable on the
+24 GB hardware the OOM fix targets.
 """
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-
-from extraction.config import ExtractionConfig
-from extraction.stages.assemble import run_assemble
-from extraction.stages.describe_figures import run_figures
-from extraction.stages.extract_text import run_text
-from extraction.stages.segment import run_segment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -29,21 +33,36 @@ STRICT_CONTENT_KEYS = ("markdown", "latex", "caption", "image_path")
 STRUCTURAL_CONTENT_KEYS = ("text", "description")
 
 
+def _run_stage(args: list[str]) -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "extraction", *args],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            f"Stage {args} failed with exit code {result.returncode}.\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 @pytest.mark.integration
-def test_all_four_stages_bit_plus_structural(tmp_path: Path):
+def test_all_four_stages_bit_plus_structural(tmp_path: Path) -> None:
     assert PDF_FIXTURE.exists(), f"Fixture PDF missing: {PDF_FIXTURE}"
     assert REFERENCE.exists(), (
         f"Reference content_list.json missing at {REFERENCE}. "
-        "Run the stages once on the fixture and copy the output there."
+        "Run the four CLI stages once on the fixture and copy the "
+        "resulting content_list.json there."
     )
 
-    cfg = ExtractionConfig()  # GPU defaults: mineru25 / olmocr2 / mineru25 / noop / qwen25vl
-
-    assert run_segment([PDF_FIXTURE], cfg, output_base=tmp_path) == 0
+    _run_stage(["segment", str(PDF_FIXTURE), "--out", str(tmp_path)])
     out_dir = tmp_path / PDF_FIXTURE.stem
-    assert run_text([out_dir], cfg) == 0
-    assert run_figures([out_dir], cfg) == 0
-    assert run_assemble([out_dir], cfg) == 0
+    _run_stage(["extract-text", str(out_dir)])
+    _run_stage(["describe-figures", str(out_dir)])
+    _run_stage(["assemble", str(out_dir)])
 
     actual = json.loads((out_dir / "content_list.json").read_text(encoding="utf-8"))
     expected = json.loads(REFERENCE.read_text(encoding="utf-8"))
