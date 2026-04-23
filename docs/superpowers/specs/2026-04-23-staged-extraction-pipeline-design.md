@@ -70,7 +70,7 @@ nächste Runde Flicks.
 | 1     | `segment <pdf>...`            | MinerU, PyMuPDF | PDF-Dateien                       | `pages/<n>/page.png`, `segmentation.json` (inkl. Metadaten), Element-Sidecars für Passthrough-Rollen (heute: Tables) |
 | 2     | `extract-text <outdir>...`    | olmOCR-2-7B     | `segmentation.json` + Page-PNGs   | Element-Sidecars für `TEXT`/`HEADING`                             |
 | 3     | `describe-figures <outdir>...`| Qwen2.5-VL-7B   | `segmentation.json` + Page-PNGs   | Element-Sidecars für `FIGURE`/`DIAGRAM`/`TECHNICAL_DRAWING` + Visual-Crops |
-| 4     | `assemble <outdir>...`        | nichts (CPU)    | alle Sidecars + `segmentation.json` | `content_list.json`, `document_rich.json`                       |
+| 4     | `assemble <outdir>...`        | nichts (CPU)    | alle Sidecars + `segmentation.json` | `content_list.json` (wie heute; `document_rich.json` ist Phase-2-Thema und bleibt ungeschrieben) |
 
 Die Argumente sind **variadisch**: eine Stage verarbeitet beliebig viele
 PDFs bzw. Output-Ordner in einer Schleife und beendet sich danach.
@@ -244,8 +244,10 @@ aktuellen Code (`pyproject.toml`, `extraction/adapters/*`,
 
 **Explizit unangetastet:**
 
-- Output-Format (`content_list.json`, `document_rich.json`, Sidecars).
-  Das sind die Verträge zur Embedding-Stage und müssen stabil bleiben.
+- Output-Format (`content_list.json`, Sidecars). Das ist der Vertrag
+  zur Embedding-Stage und muss stabil bleiben. `document_rich.json`
+  ist in der heutigen Pipeline nicht verdrahtet (Phase-2-Thema) und
+  wird auch von Stage 4 nicht geschrieben.
 - Das YAML-Config-Schema und alle Adapter-Config-Blöcke.
 - `docs/extraction_output.md`, `docs/principles.md`,
   `docs/architecture.md`. Falls nach dem Umbau ein Nachtrag zur
