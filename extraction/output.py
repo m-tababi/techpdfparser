@@ -41,14 +41,42 @@ class OutputWriter:
         )
         return path
 
-    def write_segmentation(self, regions: list) -> Path:
-        """Write raw segmentation regions for later inspection."""
+    def write_segmentation(
+        self,
+        regions: list,
+        *,
+        doc_id: str,
+        source_file: str,
+        total_pages: int,
+        segmentation_tool: str,
+    ) -> Path:
+        """Write segmentation.json with doc metadata + region list."""
         path = self.output_dir / "segmentation.json"
-        data = [r.model_dump(mode="json", exclude_none=True) for r in regions]
+        data = {
+            "doc_id": doc_id,
+            "source_file": source_file,
+            "total_pages": total_pages,
+            "segmentation_tool": segmentation_tool,
+            "regions": [r.model_dump(mode="json", exclude_none=True) for r in regions],
+        }
         path.write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         return path
+
+    def read_segmentation(self) -> dict:
+        """Load segmentation.json back into a dict with parsed Region instances."""
+        from .models import Region
+
+        path = self.output_dir / "segmentation.json"
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "doc_id": raw["doc_id"],
+            "source_file": raw["source_file"],
+            "total_pages": raw["total_pages"],
+            "segmentation_tool": raw["segmentation_tool"],
+            "regions": [Region.model_validate(r) for r in raw["regions"]],
+        }
 
     def save_page_image(self, page: int, image: Image) -> Path:
         page_dir = self.output_dir / "pages" / str(page)

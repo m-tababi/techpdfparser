@@ -80,10 +80,15 @@ class ExtractionPipeline:
 
         # 2. Segment — release the segmenter's GPU state before extractors load
         regions = self.segmenter.segment(pdf_path)
-        writer.write_segmentation(regions)
-        release_runtime_resources(self.segmenter)
-
         doc_id = self._make_doc_id(pdf_path)
+        writer.write_segmentation(
+            regions,
+            doc_id=doc_id,
+            source_file=pdf_path.name,
+            total_pages=page_count,
+            segmentation_tool=self.segmenter.tool_name,
+        )
+        release_runtime_resources(self.segmenter)
 
         # 3. Extract per role, releasing GPU state between roles so only one
         # heavy VLM/OCR model is resident at a time.

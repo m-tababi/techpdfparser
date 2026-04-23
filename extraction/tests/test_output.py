@@ -264,3 +264,59 @@ def test_write_stage_error_clears_previous_done(tmp_path):
     writer.write_stage_error("segment", RuntimeError("regression"))
     assert (tmp_path / ".stages" / "segment.error").exists()
     assert not (tmp_path / ".stages" / "segment.done").exists()
+
+
+def test_write_segmentation_stores_metadata(tmp_path):
+    from extraction.models import Region
+
+    writer = OutputWriter(tmp_path)
+    regions = [
+        Region(
+            page=0,
+            bbox=[10.0, 20.0, 100.0, 50.0],
+            region_type=ElementType.TEXT,
+            confidence=0.9,
+        ),
+    ]
+    writer.write_segmentation(
+        regions=regions,
+        doc_id="abc123",
+        source_file="example.pdf",
+        total_pages=3,
+        segmentation_tool="mineru25",
+    )
+    path = tmp_path / "segmentation.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["doc_id"] == "abc123"
+    assert raw["source_file"] == "example.pdf"
+    assert raw["total_pages"] == 3
+    assert raw["segmentation_tool"] == "mineru25"
+    assert len(raw["regions"]) == 1
+
+
+def test_read_segmentation_roundtrip(tmp_path):
+    from extraction.models import Region
+
+    writer = OutputWriter(tmp_path)
+    regions = [
+        Region(
+            page=0,
+            bbox=[0.0, 0.0, 10.0, 10.0],
+            region_type=ElementType.HEADING,
+            confidence=1.0,
+        ),
+    ]
+    writer.write_segmentation(
+        regions=regions,
+        doc_id="x",
+        source_file="y.pdf",
+        total_pages=1,
+        segmentation_tool="mineru25",
+    )
+    meta = writer.read_segmentation()
+    assert meta["doc_id"] == "x"
+    assert meta["source_file"] == "y.pdf"
+    assert meta["total_pages"] == 1
+    assert meta["segmentation_tool"] == "mineru25"
+    assert len(meta["regions"]) == 1
+    assert meta["regions"][0].region_type == ElementType.HEADING
