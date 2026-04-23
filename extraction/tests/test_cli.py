@@ -1,20 +1,79 @@
-import subprocess
+"""CLI smoke tests — does argparse wire each subcommand to the right stage?"""
+from __future__ import annotations
+
 import sys
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from extraction.__main__ import main
 
 
-def test_cli_shows_usage_without_args() -> None:
-    result = subprocess.run(
-        [sys.executable, "-m", "extraction"],
-        capture_output=True,
-        text=True,
-    )
-    assert "usage" in result.stdout.lower() or "usage" in result.stderr.lower()
+def _invoke(*argv: str) -> int:
+    with patch.object(sys, "argv", ["extraction", *argv]):
+        try:
+            main()
+            return 0
+        except SystemExit as e:
+            return int(e.code) if e.code is not None else 0
 
 
-def test_cli_extract_requires_pdf_arg() -> None:
-    result = subprocess.run(
-        [sys.executable, "-m", "extraction", "extract"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode != 0
+def test_segment_dispatches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, object] = {}
+
+    def _fake(pdfs: list[Path], cfg: object, output_base: Path) -> int:
+        calls["args"] = (list(pdfs), output_base)
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_segment", _fake)
+    pdf = tmp_path / "a.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    assert _invoke("segment", str(pdf), "--out", str(tmp_path / "o")) == 0
+    assert calls["args"] == ([pdf], tmp_path / "o")
+
+
+def test_text_dispatches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: dict[str, object] = {}
+
+    def _fake(dirs: list[Path], cfg: object) -> int:
+        calls["args"] = list(dirs)
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_text", _fake)
+    d = tmp_path / "d1"
+    d.mkdir()
+    assert _invoke("extract-text", str(d)) == 0
+    assert calls["args"] == [d]
+
+
+def test_figures_dispatches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: dict[str, object] = {}
+
+    def _fake(dirs: list[Path], cfg: object) -> int:
+        calls["args"] = list(dirs)
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_figures", _fake)
+    d = tmp_path / "d1"
+    d.mkdir()
+    assert _invoke("describe-figures", str(d)) == 0
+    assert calls["args"] == [d]
+
+
+def test_assemble_dispatches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: dict[str, object] = {}
+
+    def _fake(dirs: list[Path], cfg: object) -> int:
+        calls["args"] = list(dirs)
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_assemble", _fake)
+    d = tmp_path / "d1"
+    d.mkdir()
+    assert _invoke("assemble", str(d)) == 0
+    assert calls["args"] == [d]
+
+
+def test_unknown_subcommand_exits_nonzero() -> None:
+    assert _invoke("nope") in (1, 2)

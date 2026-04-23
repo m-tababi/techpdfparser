@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from extraction.__main__ import _resolve_renderer_dpi
 from extraction.config import ExtractionConfig, load_extraction_config
 
 
@@ -52,10 +51,8 @@ def test_get_adapter_config_returns_settings() -> None:
 def test_top_level_dpi_flows_to_renderer_when_not_overridden(tmp_path: Path) -> None:
     cfg_path = tmp_path / "cfg.yaml"
     cfg_path.write_text("extraction:\n  dpi: 300\n", encoding="utf-8")
-    from extraction.config import load_extraction_config
     cfg = load_extraction_config(cfg_path)
-    resolved = _resolve_renderer_dpi(cfg)
-    assert resolved == 300
+    assert cfg.resolve_renderer_dpi() == 300
 
 
 def test_adapter_dpi_overrides_top_level_dpi(tmp_path: Path) -> None:
@@ -64,7 +61,5 @@ def test_adapter_dpi_overrides_top_level_dpi(tmp_path: Path) -> None:
         "extraction:\n  dpi: 300\nadapters:\n  pymupdf:\n    dpi: 450\n",
         encoding="utf-8",
     )
-    from extraction.config import load_extraction_config
     cfg = load_extraction_config(cfg_path)
-    resolved = _resolve_renderer_dpi(cfg)
-    assert resolved == 450
+    assert cfg.resolve_renderer_dpi() == 450

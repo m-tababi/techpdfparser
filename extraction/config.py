@@ -10,6 +10,8 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, Field
 
+DEFAULT_OUTPUT_BASE = "outputs"
+
 
 class ExtractionConfig(BaseModel):
     """Configuration for the extraction pipeline."""
@@ -30,6 +32,13 @@ class ExtractionConfig(BaseModel):
 
     def get_adapter_config(self, adapter_name: str) -> dict[str, Any]:
         return self.adapters.get(adapter_name, {})
+
+    def resolve_renderer_dpi(self) -> int:
+        """Return effective DPI: adapter block overrides top-level dpi if set."""
+        adapter_cfg = self.get_adapter_config(self.renderer)
+        if "dpi" in adapter_cfg:
+            return int(adapter_cfg["dpi"])
+        return int(self.dpi)
 
 
 def load_extraction_config(path: str | Path) -> ExtractionConfig:
