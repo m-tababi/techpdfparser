@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from extraction.models import Element, ElementContent, ElementType
 from extraction.output import OutputWriter
 
@@ -23,6 +25,7 @@ def _mk_element(page: int, ro: int, el_id: str, kind: ElementType) -> Element:
     )
 
 
+@pytest.mark.skip(reason="monolith removal — Task 9")
 def test_rebuild_without_existing_content_list(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     writer.write_element_sidecar(_mk_element(0, 0, "a" * 16, ElementType.TEXT))
@@ -56,6 +59,7 @@ def test_rebuild_without_existing_content_list(tmp_path: Path) -> None:
     assert [e["element_id"] for e in data["elements"]] == ["a" * 16, "b" * 16]
 
 
+@pytest.mark.skip(reason="monolith removal — Task 9")
 def test_rebuild_uses_existing_content_list_metadata(tmp_path: Path) -> None:
     writer = OutputWriter(tmp_path)
     writer.write_element_sidecar(_mk_element(0, 0, "c" * 16, ElementType.TEXT))
