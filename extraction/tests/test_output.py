@@ -222,3 +222,45 @@ def test_crop_region_default_dpi_is_72_backwards_compat(tmp_path: Path) -> None:
     # No dpi → default 72 → bbox treated as pixels
     crop = writer.crop_region(page_img, [100.0, 200.0, 500.0, 400.0], dpi=72)
     assert crop.size == (400, 200)
+
+
+def test_mark_stage_done_creates_marker(tmp_path):
+    writer = OutputWriter(tmp_path)
+    writer.mark_stage_done("segment")
+    assert (tmp_path / ".stages" / "segment.done").exists()
+
+
+def test_is_stage_done_reflects_marker(tmp_path):
+    writer = OutputWriter(tmp_path)
+    assert writer.is_stage_done("segment") is False
+    writer.mark_stage_done("segment")
+    assert writer.is_stage_done("segment") is True
+
+
+def test_mark_stage_done_clears_previous_error(tmp_path):
+    writer = OutputWriter(tmp_path)
+    writer.write_stage_error("segment", RuntimeError("boom"))
+    writer.mark_stage_done("segment")
+    assert (tmp_path / ".stages" / "segment.done").exists()
+    assert not (tmp_path / ".stages" / "segment.error").exists()
+
+
+def test_write_stage_error_writes_traceback(tmp_path):
+    writer = OutputWriter(tmp_path)
+    try:
+        raise RuntimeError("something broke")
+    except RuntimeError as exc:
+        writer.write_stage_error("segment", exc)
+    error_path = tmp_path / ".stages" / "segment.error"
+    assert error_path.exists()
+    text = error_path.read_text(encoding="utf-8")
+    assert "RuntimeError" in text
+    assert "something broke" in text
+
+
+def test_write_stage_error_clears_previous_done(tmp_path):
+    writer = OutputWriter(tmp_path)
+    writer.mark_stage_done("segment")
+    writer.write_stage_error("segment", RuntimeError("regression"))
+    assert (tmp_path / ".stages" / "segment.error").exists()
+    assert not (tmp_path / ".stages" / "segment.done").exists()

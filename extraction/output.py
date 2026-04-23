@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import traceback
 from pathlib import Path
 
 from PIL.Image import Image
@@ -88,6 +89,33 @@ class OutputWriter:
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         return path
+
+    def _stages_dir(self) -> Path:
+        p = self.output_dir / ".stages"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    def is_stage_done(self, stage_name: str) -> bool:
+        return (self._stages_dir() / f"{stage_name}.done").exists()
+
+    def mark_stage_done(self, stage_name: str) -> Path:
+        done = self._stages_dir() / f"{stage_name}.done"
+        err = self._stages_dir() / f"{stage_name}.error"
+        if err.exists():
+            err.unlink()
+        done.touch()
+        return done
+
+    def write_stage_error(self, stage_name: str, exc: BaseException) -> Path:
+        err = self._stages_dir() / f"{stage_name}.error"
+        done = self._stages_dir() / f"{stage_name}.done"
+        if done.exists():
+            done.unlink()
+        err.write_text(
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            encoding="utf-8",
+        )
+        return err
 
     def read_all_sidecars(self) -> list[Element]:
         """Load every <el_id>_<type>.json from pages/*/ into Element instances."""
