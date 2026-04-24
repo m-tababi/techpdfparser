@@ -257,12 +257,16 @@ def _block_to_region(
 
     if block_type == _BLOCK_TABLE:
         _, html = _extract_body_data(block)
+        html = html.strip()
         rows = _html_to_rows(html)
         caption = _collect_block_text(block, _BLOCK_TABLE_CAPTION)
-        markdown = _rows_to_markdown(rows) if rows else html.strip()
-        if not markdown and not caption:
+        # markdown is a lossy flattening (rowspan/colspan ignored); html keeps
+        # the hierarchical structure so downstream consumers can choose.
+        markdown = _rows_to_markdown(rows) if rows else html
+        if not markdown and not caption and not html:
             return None
         content = ElementContent(
+            html=html or None,
             markdown=markdown or None,
             text=markdown or None,
             caption=caption or None,

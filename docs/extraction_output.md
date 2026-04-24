@@ -78,6 +78,7 @@ Jeder Sidecar und jeder Eintrag in `content_list.json:elements` folgt diesem Sch
   "content": {
     "text": "...",
     "markdown": "...",
+    "html": "<table>...</table>",
     "latex": "...",
     "image_path": "pages/1/<el_id>_table.png",
     "description": "...",
@@ -95,11 +96,17 @@ Optionale Felder in `content` — welches gesetzt ist, hängt vom `type` ab:
 |---------------------|----------------------------------------------------------|
 | text                | `text`                                                   |
 | heading             | `text`                                                   |
-| table               | `markdown`, `text`, `image_path`, ggf. `caption`         |
+| table               | `markdown`, `html`, `text`, `image_path`, ggf. `caption` |
 | formula             | `latex`, `text`, `image_path`                            |
 | figure              | `description`, `image_path`, ggf. `caption`              |
 | diagram             | `description`, `image_path`, ggf. `caption`              |
 | technical_drawing   | `description`, `image_path`, ggf. `caption`              |
+
+`markdown` ist eine flache Pipe-Darstellung für Text-basierte Konsumenten
+(Embedding, Suche). `html` behält die Original-Struktur des Segmenters
+inklusive `rowspan`/`colspan` für Konsumenten, die die Tabellen-Hierarchie
+brauchen (Rendering, strukturierte Queries). `text` ist bei Tabellen
+identisch zu `markdown`.
 
 Felder die nicht gesetzt sind, werden beim Schreiben **weggelassen** (`exclude_none=True`),
 nicht als `null` serialisiert.
@@ -160,7 +167,7 @@ Datenquellen pro Feld:
 | `caption`                                  | Segmenter (Layout)      |
 | `image_path`                               | Pipeline (aus dem Crop) |
 | `text`                                     | `text_extractor`        |
-| `markdown`                                 | `table_extractor`       |
+| `markdown`, `html`                         | `table_extractor`       |
 | `latex`                                    | `formula_extractor`     |
 | `description`                              | `figure_descriptor`     |
 
@@ -185,9 +192,9 @@ Beispiele:
 | `segmenter: mineru25`, `figure_descriptor: noop` | Figure-Element hat `caption` aus dem Segmenter, aber keine `description`.               |
 
 Welche Tool-Kombination pro Role optimal ist, wird durch Benchmarks
-entschieden (siehe `backlog.md` → „Per-role extractor benchmark"), nicht durch
-Pipeline-Heuristik. Der Default `table_extractor: mineru25` nutzt die
-Tool-Match-Optimierung — das ist Effizienz, kein Design-Constraint.
+entschieden, nicht durch Pipeline-Heuristik. Der Default
+`table_extractor: mineru25` nutzt die Tool-Match-Optimierung — das ist
+Effizienz, kein Design-Constraint.
 
 ## Reading Order
 

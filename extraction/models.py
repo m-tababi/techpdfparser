@@ -25,6 +25,7 @@ class ElementContent(BaseModel):
 
     text: str | None = None
     markdown: str | None = None
+    html: str | None = None
     latex: str | None = None
     image_path: str | None = None
     description: str | None = None

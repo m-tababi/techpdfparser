@@ -70,3 +70,35 @@ def test_confidence_for_block_picks_best_iou_not_highest_score() -> None:
     ]
     block = {"bbox": [0, 0, 100, 100], "type": "text"}
     assert _confidence_for_block(block, layout_dets) == 0.60
+
+
+def test_table_block_keeps_raw_html_with_rowspan_colspan() -> None:
+    # Hierarchical header: 'Group' spans two sub-columns; markdown flattens
+    # this, html must preserve it.
+    html = (
+        "<table><tr><td rowspan=\"2\">Mat</td>"
+        "<td colspan=\"2\">Mech</td></tr>"
+        "<tr><td>0</td><td>90</td></tr>"
+        "<tr><td>steel</td><td>180</td><td>204</td></tr></table>"
+    )
+    block = {
+        "bbox": [0.0, 0.0, 100.0, 100.0],
+        "type": "table",
+        "score": 0.95,
+        "blocks": [
+            {
+                "type": "table_body",
+                "lines": [{"spans": [{"type": "table", "html": html, "image_path": ""}]}],
+            }
+        ],
+    }
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.region_type == ElementType.TABLE
+    assert region.content is not None
+    assert region.content.html == html
+    assert 'rowspan="2"' in region.content.html
+    assert 'colspan="2"' in region.content.html
+    # markdown stays as the flat fallback
+    assert region.content.markdown is not None
+    assert "Mat" in region.content.markdown
