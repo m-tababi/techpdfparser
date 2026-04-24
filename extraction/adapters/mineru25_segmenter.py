@@ -172,20 +172,46 @@ class MinerU25FormulaExtractor:
         return ElementContent()
 
 
+_IOU_MATCH_THRESHOLD = 0.5
+
+
+def _bbox_iou(a: list[float], b: list[float]) -> float:
+    ix0 = max(a[0], b[0])
+    iy0 = max(a[1], b[1])
+    ix1 = min(a[2], b[2])
+    iy1 = min(a[3], b[3])
+    if ix1 <= ix0 or iy1 <= iy0:
+        return 0.0
+    intersection = (ix1 - ix0) * (iy1 - iy0)
+    area_a = max(0.0, (a[2] - a[0]) * (a[3] - a[1]))
+    area_b = max(0.0, (b[2] - b[0]) * (b[3] - b[1]))
+    union = area_a + area_b - intersection
+    if union <= 0.0:
+        return 0.0
+    return intersection / union
+
+
 def _confidence_for_block(
     block: dict[str, Any], layout_dets: list[dict[str, Any]]
 ) -> float:
+    # MinerU's para_blocks are post-merge wrappers; their bbox rarely equals
+    # any single layout_det bbox exactly. Match by IoU and take the score of
+    # the best-overlapping detection (>= _IOU_MATCH_THRESHOLD).
     block_bbox = _to_bbox(block.get("bbox"))
     if block_bbox is None:
         return 1.0
-    target = tuple(round(v) for v in block_bbox)
+    best_score: float | None = None
+    best_iou = 0.0
     for det in layout_dets:
         det_bbox = _to_bbox(det.get("bbox"))
         if det_bbox is None:
             continue
-        if tuple(round(v) for v in det_bbox) == target:
-            return float(det.get("score", 1.0))
-    return 1.0
+        iou = _bbox_iou(block_bbox, det_bbox)
+        if iou < _IOU_MATCH_THRESHOLD or iou <= best_iou:
+            continue
+        best_iou = iou
+        best_score = float(det.get("score", 1.0))
+    return 1.0 if best_score is None else best_score
 
 
 def _block_to_region(

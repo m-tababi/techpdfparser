@@ -41,3 +41,25 @@ def test_mineru25_text_and_formula_passthroughs_are_registered() -> None:
     formula = get_formula_extractor("mineru25")
     assert text.tool_name == "mineru25"
     assert formula.tool_name == "mineru25"
+
+
+def test_confidence_for_block_uses_iou_match() -> None:
+    # Block bbox doesn't equal any layout_det bbox exactly, but one det is
+    # contained in it (IoU = 10000/14400 ≈ 0.69, above threshold).
+    layout_dets = [
+        {"bbox": [10, 10, 110, 110], "score": 0.75},
+        {"bbox": [500, 500, 600, 600], "score": 0.99},
+    ]
+    block = {"bbox": [0, 0, 120, 120], "type": "text"}
+    assert _confidence_for_block(block, layout_dets) == 0.75
+
+
+def test_confidence_for_block_picks_best_iou_not_highest_score() -> None:
+    # Two dets overlap: one with high IoU and moderate score, one with low
+    # IoU and high score. Should return the high-IoU det's score.
+    layout_dets = [
+        {"bbox": [0, 0, 100, 100], "score": 0.60},    # IoU with block = 1.0
+        {"bbox": [0, 0, 200, 200], "score": 0.99},    # IoU = 100*100/40000 = 0.25
+    ]
+    block = {"bbox": [0, 0, 100, 100], "type": "text"}
+    assert _confidence_for_block(block, layout_dets) == 0.60
