@@ -102,5 +102,9 @@ class Region(BaseModel):
     page: int
     bbox: list[float] = Field(min_length=4, max_length=4)
     region_type: ElementType
+    # Order in which the segmenter emitted this region, across all pages.
+    # Stages propagate this to Element.reading_order_index; assemble re-numbers
+    # globally at the end. Default 0 keeps old segmentation.json files loadable.
+    reading_order_index: int = 0
     confidence: float = Field(ge=0.0, le=1.0)
     content: ElementContent | None = None

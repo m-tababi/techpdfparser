@@ -101,6 +101,7 @@ class MinerU25Segmenter:
         for page_number, block, layout_dets in _iter_para_blocks(raw):
             region = _block_to_region(block, page_number, layout_dets)
             if region is not None:
+                region.reading_order_index = len(regions)
                 regions.append(region)
         return regions
 

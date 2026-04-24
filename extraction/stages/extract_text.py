@@ -109,7 +109,7 @@ def _process_one(
             type=region.region_type,
             page=region.page,
             bbox=region.bbox,
-            reading_order_index=0,
+            reading_order_index=region.reading_order_index,
             section_path=[],
             confidence=region.confidence,
             extractor=extractor.tool_name,  # type: ignore[attr-defined]

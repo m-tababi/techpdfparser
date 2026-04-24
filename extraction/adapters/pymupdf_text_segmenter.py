@@ -50,6 +50,7 @@ class PyMuPDFTextSegmenter:
                             page=page_idx,
                             bbox=bbox,
                             region_type=ElementType.TEXT,
+                            reading_order_index=len(regions),
                             confidence=1.0,
                             content=ElementContent(text=text),
                         )

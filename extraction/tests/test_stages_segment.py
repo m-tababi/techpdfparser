@@ -50,10 +50,11 @@ class _StubSegmenter:
     def segment(self, pdf_path):
         return [
             Region(page=0, bbox=[10.0, 20.0, 100.0, 60.0],
-                   region_type=ElementType.TEXT, confidence=0.9,
-                   content=ElementContent(text="hello")),
+                   region_type=ElementType.TEXT, reading_order_index=0,
+                   confidence=0.9, content=ElementContent(text="hello")),
             Region(page=1, bbox=[0.0, 0.0, 200.0, 100.0],
-                   region_type=ElementType.TABLE, confidence=0.8,
+                   region_type=ElementType.TABLE, reading_order_index=1,
+                   confidence=0.8,
                    content=ElementContent(markdown="| a | b |\n|---|---|")),
         ]
 
@@ -93,6 +94,24 @@ def test_segment_happy_path(tmp_path: Path):
     assert el["content"]["markdown"].startswith("| a | b |")
 
     assert not list((out / "pages" / "0").glob("*_text.json"))
+
+
+def test_segment_threads_region_reading_order_index_to_element(tmp_path: Path):
+    """The Element sidecar must carry the segmenter's reading_order_index, not 0."""
+    pdf = tmp_path / "sample.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
+    cfg = _make_cfg()
+
+    run_segment([pdf], cfg, output_base=tmp_path / "outputs")
+
+    table_sidecars = list(
+        (tmp_path / "outputs" / "sample" / "pages" / "1").glob("*_table.json")
+    )
+    assert len(table_sidecars) == 1
+    el = json.loads(table_sidecars[0].read_text(encoding="utf-8"))
+    # _StubSegmenter returns the table as the 2nd region (index 1). Without the
+    # fix this defaulted to 0 and collapsed the sort in build_content_list.
+    assert el["reading_order_index"] == 1
 
 
 def test_segment_skips_when_marker_exists(tmp_path: Path, monkeypatch):
