@@ -19,7 +19,7 @@ class _StubFig:
     def __init__(self, **_): pass
     @property
     def tool_name(self): return self.TOOL_NAME
-    def describe(self, image):
+    def describe(self, image, caption=None):
         return f"a stub description {image.size}"
 
 
@@ -29,7 +29,7 @@ class _StubFigEmpty:
     def __init__(self, **_): pass
     @property
     def tool_name(self): return self.TOOL_NAME
-    def describe(self, image):
+    def describe(self, image, caption=None):
         return ""
 
 
@@ -39,7 +39,7 @@ class _StubFigBroken:
     def __init__(self, **_): pass
     @property
     def tool_name(self): return self.TOOL_NAME
-    def describe(self, image):
+    def describe(self, image, caption=None):
         raise RuntimeError("describe blew up")
 
 

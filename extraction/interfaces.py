@@ -68,6 +68,11 @@ class FigureDescriptor(Protocol):
     @property
     def tool_name(self) -> str: ...
 
-    def describe(self, image: Image) -> str:
-        """Generate a text description of a figure/diagram image."""
+    def describe(self, image: Image, caption: str | None = None) -> str:
+        """Generate a text description of a figure/diagram image.
+
+        ``caption`` carries the Segmenter-detected figure caption when
+        available. Adapters that can use it (VLMs) should treat it as
+        grounding context; simple adapters may ignore it.
+        """
         ...

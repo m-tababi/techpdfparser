@@ -90,7 +90,7 @@ class Qwen25VLFigureDescriptor:
         self._model = None
         self._processor = None
 
-    def describe(self, image: Image) -> str:
+    def describe(self, image: Image, caption: str | None = None) -> str:
         self._load()
         import torch
 
