@@ -17,12 +17,26 @@ from ..registry import register_figure_descriptor
 if TYPE_CHECKING:
     from PIL.Image import Image
 
-_DESCRIBE_PROMPT = (
+_DESCRIBE_PROMPT_BASE = (
     "Describe this figure from a technical document concisely. "
     "Identify the visualization type (chart, diagram, graph, schematic, etc.), "
     "what data or concept it shows, and any key values or trends visible. "
     "Be specific and technical. Two to four sentences maximum."
 )
+
+
+def _build_prompt(caption: str | None) -> str:
+    """Return the Qwen user-text, with caption grounding when non-empty."""
+    if caption is None or not caption.strip():
+        return _DESCRIBE_PROMPT_BASE
+    # Concatenation (not .format) — der Caption-Text darf `{}` enthalten.
+    return (
+        _DESCRIBE_PROMPT_BASE
+        + "\n\nThe figure has this caption from the source document:\n"
+        + "  " + caption.strip() + "\n\n"
+        + "Use the caption as grounding context. Do not invent any fact "
+        + "that is not supported by either the image or the caption."
+    )
 
 
 @register_figure_descriptor("qwen25vl")
@@ -94,12 +108,13 @@ class Qwen25VLFigureDescriptor:
         self._load()
         import torch
 
+        prompt_text = _build_prompt(caption)
         messages = [
             {
                 "role": "user",
                 "content": [
                     {"type": "image", "image": image},
-                    {"type": "text", "text": _DESCRIBE_PROMPT},
+                    {"type": "text", "text": prompt_text},
                 ],
             }
         ]
