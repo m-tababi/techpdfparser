@@ -4,13 +4,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 import extraction.adapters  # noqa: F401 — trigger noop adapter registration
 from extraction.config import ExtractionConfig
 from extraction.models import ElementContent, ElementType, Region
 from extraction.output import OutputWriter
-from extraction.registry import register_table_extractor, register_text_extractor
+from extraction.registry import (
+    register_formula_extractor,
+    register_table_extractor,
+    register_text_extractor,
+)
 from extraction.stages.extract_text import run_text
 
 
@@ -59,7 +64,7 @@ def _cfg() -> ExtractionConfig:
     )
 
 
-def test_text_happy_path(tmp_path: Path):
+def test_text_happy_path(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     _seed_segment(out)
     exit_code = run_text([out], _cfg())
@@ -74,7 +79,7 @@ def test_text_happy_path(tmp_path: Path):
     assert text_el["extractor"] == "stub_text"
 
 
-def test_text_skips_when_marker_exists(tmp_path: Path, monkeypatch):
+def test_text_skips_when_marker_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     out = tmp_path / "doc1"
     _seed_segment(out)
     OutputWriter(out).mark_stage_done("extract-text")
@@ -87,7 +92,7 @@ def test_text_skips_when_marker_exists(tmp_path: Path, monkeypatch):
     assert run_text([out], _cfg()) == 0
 
 
-def test_text_missing_prereq_writes_error(tmp_path: Path):
+def test_text_missing_prereq_writes_error(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     out.mkdir(parents=True)
     assert run_text([out], _cfg()) == 1
@@ -106,7 +111,7 @@ class _BrokenText:
         raise RuntimeError("ocr blew up")
 
 
-def test_text_error_writes_marker_and_continues(tmp_path: Path):
+def test_text_error_writes_marker_and_continues(tmp_path: Path) -> None:
     out_a = tmp_path / "doc_a"
     out_b = tmp_path / "doc_b"
     _seed_segment(out_a)
@@ -119,7 +124,7 @@ def test_text_error_writes_marker_and_continues(tmp_path: Path):
         assert not (out / ".stages" / "extract-text.done").exists()
 
 
-def test_text_skips_region_when_sidecar_already_exists(tmp_path: Path, monkeypatch):
+def test_text_skips_region_when_sidecar_already_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Region mit existierendem Sidecar (Stage-1-Passthrough) wird nicht re-extracted."""
     out = tmp_path / "doc1"
     _seed_segment(out)
@@ -165,7 +170,7 @@ class _StubTextCapture:
         return ElementContent(text="ok")
 
 
-def test_text_extractor_receives_region_crop(tmp_path: Path):
+def test_text_extractor_receives_region_crop(tmp_path: Path) -> None:
     """TextExtractor bekommt Region-Crop, nicht die Vollseite."""
     _captured_text_sizes.clear()
     out = tmp_path / "doc1"
@@ -209,7 +214,7 @@ def _seed_segment_with_table(out_dir: Path) -> None:
     writer.mark_stage_done("segment")
 
 
-def test_table_role_mismatch_extracts_sidecar(tmp_path: Path):
+def test_table_role_mismatch_extracts_sidecar(tmp_path: Path) -> None:
     """Bei table_extractor != segmenter ruft Stage 2 den Table-Extractor auf."""
     out = tmp_path / "doc1"
     _seed_segment_with_table(out)
@@ -221,9 +226,6 @@ def test_table_role_mismatch_extracts_sidecar(tmp_path: Path):
     assert data["extractor"] == "stub_table"
     assert data["content"]["markdown"].startswith("| h1")
     assert data["content"]["caption"] == "Table 1. Demo."
-
-
-from extraction.registry import register_formula_extractor
 
 
 @register_formula_extractor("stub_formula")
@@ -251,7 +253,7 @@ def _seed_segment_with_formula(out_dir: Path) -> None:
     writer.mark_stage_done("segment")
 
 
-def test_formula_role_mismatch_extracts_sidecar(tmp_path: Path):
+def test_formula_role_mismatch_extracts_sidecar(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     _seed_segment_with_formula(out)
     cfg = _cfg().model_copy(update={"formula_extractor": "stub_formula"})
@@ -273,7 +275,7 @@ class _StubTableEmpty:
         return ElementContent()
 
 
-def test_table_persists_with_image_path_when_content_empty(tmp_path: Path):
+def test_table_persists_with_image_path_when_content_empty(tmp_path: Path) -> None:
     """Table mit leerem Extractor-Output persistiert, solange Crop + image_path da sind."""
     out = tmp_path / "doc1"
     _seed_segment_with_table(out)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from extraction.config import ExtractionConfig
@@ -70,7 +71,7 @@ def _make_cfg() -> ExtractionConfig:
     )
 
 
-def test_segment_happy_path(tmp_path: Path):
+def test_segment_happy_path(tmp_path: Path) -> None:
     pdf = tmp_path / "sample.pdf"
     pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
     cfg = _make_cfg()
@@ -96,7 +97,7 @@ def test_segment_happy_path(tmp_path: Path):
     assert not list((out / "pages" / "0").glob("*_text.json"))
 
 
-def test_segment_threads_region_reading_order_index_to_element(tmp_path: Path):
+def test_segment_threads_region_reading_order_index_to_element(tmp_path: Path) -> None:
     """The Element sidecar must carry the segmenter's reading_order_index, not 0."""
     pdf = tmp_path / "sample.pdf"
     pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
@@ -114,7 +115,7 @@ def test_segment_threads_region_reading_order_index_to_element(tmp_path: Path):
     assert el["reading_order_index"] == 1
 
 
-def test_segment_skips_when_marker_exists(tmp_path: Path, monkeypatch):
+def test_segment_skips_when_marker_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pdf = tmp_path / "sample.pdf"
     pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
     cfg = _make_cfg()
@@ -147,7 +148,7 @@ class _BrokenSegmenter:
         raise RuntimeError("segmenter blew up")
 
 
-def test_segment_dirty_output_dir_without_done_marker_errors(tmp_path: Path, monkeypatch):
+def test_segment_dirty_output_dir_without_done_marker_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Pre-existing artefacts without segment.done means a crashed prior run.
     Stage must refuse to re-process and write .error, not silently overwrite."""
     pdf = tmp_path / "sample.pdf"
@@ -172,7 +173,7 @@ def test_segment_dirty_output_dir_without_done_marker_errors(tmp_path: Path, mon
     assert not (out_dir / ".stages" / "segment.done").exists()
 
 
-def test_segment_error_writes_marker_and_continues(tmp_path: Path):
+def test_segment_error_writes_marker_and_continues(tmp_path: Path) -> None:
     pdf_ok = tmp_path / "good.pdf"
     pdf_ok.write_bytes(b"%PDF-1.4\n")
     pdf_bad = tmp_path / "bad.pdf"

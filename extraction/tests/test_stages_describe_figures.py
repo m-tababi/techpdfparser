@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from extraction.config import ExtractionConfig
@@ -43,7 +44,7 @@ class _StubFigBroken:
         raise RuntimeError("describe blew up")
 
 
-def _seed_segment(out_dir: Path):
+def _seed_segment(out_dir: Path) -> None:
     writer = OutputWriter(out_dir)
     (out_dir / "pages" / "0").mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (600, 800)).save(out_dir / "pages" / "0" / "page.png")
@@ -69,7 +70,7 @@ def _cfg(figure_descriptor: str = "stub_fig") -> ExtractionConfig:
     )
 
 
-def test_figures_happy_path(tmp_path: Path):
+def test_figures_happy_path(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     _seed_segment(out)
     assert run_figures([out], _cfg()) == 0
@@ -84,7 +85,7 @@ def test_figures_happy_path(tmp_path: Path):
     assert fig["content"]["image_path"].endswith(".png")
 
 
-def test_figures_drops_empty_when_no_crop_saved(tmp_path: Path, monkeypatch):
+def test_figures_drops_empty_when_no_crop_saved(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """If describer returns empty AND crop save fails, the per-PDF errors out."""
     out = tmp_path / "doc1"
     _seed_segment(out)
@@ -98,7 +99,7 @@ def test_figures_drops_empty_when_no_crop_saved(tmp_path: Path, monkeypatch):
     assert exit_code == 1
 
 
-def test_figures_skips_when_marker_exists(tmp_path: Path, monkeypatch):
+def test_figures_skips_when_marker_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     out = tmp_path / "doc1"
     _seed_segment(out)
     OutputWriter(out).mark_stage_done("describe-figures")
@@ -109,14 +110,14 @@ def test_figures_skips_when_marker_exists(tmp_path: Path, monkeypatch):
     assert run_figures([out], _cfg()) == 0
 
 
-def test_figures_missing_prereq_writes_error(tmp_path: Path):
+def test_figures_missing_prereq_writes_error(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     out.mkdir(parents=True)
     assert run_figures([out], _cfg()) == 1
     assert (out / ".stages" / "describe-figures.error").exists()
 
 
-def test_figures_error_writes_marker_and_continues(tmp_path: Path):
+def test_figures_error_writes_marker_and_continues(tmp_path: Path) -> None:
     out_a = tmp_path / "doc_a"
     out_b = tmp_path / "doc_b"
     _seed_segment(out_a)
@@ -141,7 +142,7 @@ class _StubFigCapture:
         return "ok"
 
 
-def test_figures_passes_caption_to_describer(tmp_path: Path):
+def test_figures_passes_caption_to_describer(tmp_path: Path) -> None:
     """Stage 3 reicht region.content.caption durch an describe()."""
     _captured_captions.clear()
     out = tmp_path / "doc1"
