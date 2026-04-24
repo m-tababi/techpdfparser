@@ -43,9 +43,16 @@ def test_mineru25_text_and_formula_passthroughs_are_registered() -> None:
     assert formula.tool_name == "mineru25"
 
 
-def test_confidence_for_block_uses_iou_match() -> None:
-    # Block bbox doesn't equal any layout_det bbox exactly, but one det is
-    # contained in it (IoU = 10000/14400 ≈ 0.69, above threshold).
+def test_confidence_for_block_prefers_direct_block_score() -> None:
+    # MinerU 2.5 writes the score directly on each para_block; layout_dets is
+    # empty. Prefer the direct score.
+    block = {"bbox": [10, 60, 100, 200], "type": "text", "score": 0.87}
+    assert _confidence_for_block(block, layout_dets=[]) == 0.87
+
+
+def test_confidence_for_block_uses_iou_match_when_no_direct_score() -> None:
+    # Fallback path: no direct score → find best-overlapping layout_det.
+    # Block [0,0,120,120] vs det [10,10,110,110] → IoU = 10000/14400 ≈ 0.69.
     layout_dets = [
         {"bbox": [10, 10, 110, 110], "score": 0.75},
         {"bbox": [500, 500, 600, 600], "score": 0.99},

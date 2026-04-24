@@ -195,9 +195,13 @@ def _bbox_iou(a: list[float], b: list[float]) -> float:
 def _confidence_for_block(
     block: dict[str, Any], layout_dets: list[dict[str, Any]]
 ) -> float:
-    # MinerU's para_blocks are post-merge wrappers; their bbox rarely equals
-    # any single layout_det bbox exactly. Match by IoU and take the score of
-    # the best-overlapping detection (>= _IOU_MATCH_THRESHOLD).
+    # MinerU 2.5 writes the detection score directly onto each para_block.
+    # Prefer that. layout_dets is populated only by older backends; when it
+    # is, match by IoU and return the best-overlapping detection's score.
+    direct_score = block.get("score")
+    if direct_score is not None:
+        return float(direct_score)
+
     block_bbox = _to_bbox(block.get("bbox"))
     if block_bbox is None:
         return 1.0
