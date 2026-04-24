@@ -37,8 +37,12 @@ class TextExtractor(Protocol):
     @property
     def tool_name(self) -> str: ...
 
-    def extract(self, page_image: Image, page_number: int) -> ElementContent:
-        """Extract text from a page image. Returns content with text field set."""
+    def extract(self, region_image: Image, page_number: int) -> ElementContent:
+        """Extract text from a region crop. Returns content with text field set.
+
+        The image is a cropped region (heading/paragraph) produced by the
+        pipeline from the rendered page image, not the full page.
+        """
         ...
 
 
