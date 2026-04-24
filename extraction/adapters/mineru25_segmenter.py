@@ -18,7 +18,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..models import ElementContent, ElementType, Region
-from ..registry import register_segmenter, register_table_extractor
+from ..registry import (
+    register_formula_extractor,
+    register_segmenter,
+    register_table_extractor,
+    register_text_extractor,
+)
 
 _BLOCK_TEXT = "text"
 _BLOCK_TITLE = "title"
@@ -115,6 +120,48 @@ class MinerU25TableExtractor:
     def __init__(self, **_kwargs: Any) -> None:
         # Shares the adapters.mineru25 config block with the segmenter;
         # this passthrough has nothing to configure, so swallow any kwargs.
+        pass
+
+    @property
+    def tool_name(self) -> str:
+        return self.TOOL_NAME
+
+    def extract(self, region_image: Any, page_number: int) -> ElementContent:
+        return ElementContent()
+
+
+@register_text_extractor("mineru25")
+class MinerU25TextExtractor:
+    """Passthrough role for text/heading regions.
+
+    MinerU's middle_json carries per-region text already, so the pipeline's
+    role-match keeps the segmenter content and never calls this extractor.
+    """
+
+    TOOL_NAME = "mineru25"
+
+    def __init__(self, **_kwargs: Any) -> None:
+        pass
+
+    @property
+    def tool_name(self) -> str:
+        return self.TOOL_NAME
+
+    def extract(self, page_image: Any, page_number: int) -> ElementContent:
+        return ElementContent()
+
+
+@register_formula_extractor("mineru25")
+class MinerU25FormulaExtractor:
+    """Passthrough role for interline-equation regions.
+
+    MinerU yields LaTeX for each interline_equation block; the pipeline's
+    role-match keeps that content and never calls this extractor.
+    """
+
+    TOOL_NAME = "mineru25"
+
+    def __init__(self, **_kwargs: Any) -> None:
         pass
 
     @property

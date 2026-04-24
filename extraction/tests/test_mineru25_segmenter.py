@@ -5,6 +5,7 @@ from extraction.adapters.mineru25_segmenter import (
     _confidence_for_block,
 )
 from extraction.models import ElementType
+from extraction.registry import get_formula_extractor, get_text_extractor
 
 
 def test_confidence_for_block_matches_by_bbox() -> None:
@@ -33,3 +34,10 @@ def test_block_to_region_uses_layout_dets_confidence() -> None:
     assert region is not None
     assert region.region_type == ElementType.TEXT
     assert abs(region.confidence - 0.33) < 1e-6
+
+
+def test_mineru25_text_and_formula_passthroughs_are_registered() -> None:
+    text = get_text_extractor("mineru25")
+    formula = get_formula_extractor("mineru25")
+    assert text.tool_name == "mineru25"
+    assert formula.tool_name == "mineru25"

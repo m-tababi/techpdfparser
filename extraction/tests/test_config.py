@@ -7,9 +7,9 @@ def test_default_config_has_all_fields() -> None:
     cfg = ExtractionConfig()
     assert cfg.renderer == "pymupdf"
     assert cfg.segmenter == "mineru25"
-    assert cfg.text_extractor == "olmocr2"
+    assert cfg.text_extractor == "mineru25"
     assert cfg.table_extractor == "mineru25"
-    assert cfg.formula_extractor == "noop"
+    assert cfg.formula_extractor == "mineru25"
     assert cfg.figure_descriptor == "qwen25vl"
     assert cfg.output_dir == "outputs"
     assert cfg.confidence_threshold == 0.3
