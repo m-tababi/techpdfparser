@@ -9,12 +9,15 @@ from PIL import Image as PILImage
 from ..config import ExtractionConfig
 from ..models import Element, ElementContent, ElementType, Region
 from ..output import OutputWriter
-from ..registry import get_text_extractor
+from ..registry import get_formula_extractor, get_table_extractor, get_text_extractor
 from . import StageName, StageOutcome, print_stage_summary
 
 _STAGE: StageName = "extract-text"
 _PREV: StageName = "segment"
-_TARGET_TYPES = {ElementType.TEXT, ElementType.HEADING}
+_TARGET_TYPES = {
+    ElementType.TEXT, ElementType.HEADING,
+    ElementType.TABLE, ElementType.FORMULA,
+}
 
 
 def _element_id(doc_id: str, region: Region) -> str:
@@ -52,14 +55,26 @@ def run_text(out_dirs: list[Path], cfg: ExtractionConfig) -> int:
             if (d / ".stages" / f"{_STAGE}.done").exists()
         ])
 
-    extractor = get_text_extractor(
+    text_extractor = get_text_extractor(
         cfg.text_extractor, **cfg.get_adapter_config(cfg.text_extractor)
     )
+    table_extractor = get_table_extractor(
+        cfg.table_extractor, **cfg.get_adapter_config(cfg.table_extractor)
+    )
+    formula_extractor = get_formula_extractor(
+        cfg.formula_extractor, **cfg.get_adapter_config(cfg.formula_extractor)
+    )
+    extractors: dict[ElementType, object] = {
+        ElementType.TEXT: text_extractor,
+        ElementType.HEADING: text_extractor,
+        ElementType.TABLE: table_extractor,
+        ElementType.FORMULA: formula_extractor,
+    }
 
     for out_dir, writer, meta in plan:
         label = str(out_dir)
         try:
-            _process_one(out_dir, writer, meta, extractor, cfg)
+            _process_one(out_dir, writer, meta, extractors, cfg)
             writer.mark_stage_done(_STAGE)
             outcomes.append(StageOutcome(label=label, status="success"))
             print(f"Processing {label} ... ✓")
@@ -87,7 +102,7 @@ def _process_one(
     out_dir: Path,
     writer: OutputWriter,
     meta: dict,
-    extractor: object,
+    extractors: dict[ElementType, object],
     cfg: ExtractionConfig,
 ) -> None:
     regions: list[Region] = meta["regions"]
@@ -104,6 +119,7 @@ def _process_one(
         )
         if sidecar.exists():
             continue
+        extractor = extractors[region.region_type]
         page_img = _load_page(out_dir, region.page)
         crop = writer.crop_region(
             page_img, region.bbox, dpi=cfg.resolve_renderer_dpi()
@@ -111,8 +127,17 @@ def _process_one(
         content: ElementContent = extractor.extract(crop, region.page)  # type: ignore[attr-defined]
         if region.content is not None and region.content.caption:
             content.caption = region.content.caption
-        if not (content.text or "").strip():
-            continue
+        if region.region_type in (ElementType.TEXT, ElementType.HEADING):
+            if not (content.text or "").strip():
+                continue
+        else:
+            # TABLE / FORMULA: Crop + image_path werden in Task 7 ergänzt.
+            if not (
+                (content.text or "").strip()
+                or (content.markdown or "").strip()
+                or (content.latex or "").strip()
+            ):
+                continue
         el = Element(
             element_id=el_id,
             type=region.region_type,

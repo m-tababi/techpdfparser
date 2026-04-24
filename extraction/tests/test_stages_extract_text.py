@@ -6,10 +6,11 @@ from pathlib import Path
 
 from PIL import Image
 
+import extraction.adapters  # noqa: F401 — trigger noop adapter registration
 from extraction.config import ExtractionConfig
 from extraction.models import ElementContent, ElementType, Region
 from extraction.output import OutputWriter
-from extraction.registry import register_text_extractor
+from extraction.registry import register_table_extractor, register_text_extractor
 from extraction.stages.extract_text import run_text
 
 
@@ -176,3 +177,47 @@ def test_text_extractor_receives_region_crop(tmp_path: Path):
         assert (w, h) != (600, 800), (
             f"extractor bekam Vollseite {(w, h)}, nicht Crop"
         )
+
+
+@register_table_extractor("stub_table")
+class _StubTable:
+    TOOL_NAME = "stub_table"
+    def __init__(self, **_): pass
+    @property
+    def tool_name(self): return self.TOOL_NAME
+    def extract(self, region_image, page_number):
+        return ElementContent(
+            markdown="| h1 | h2 |\n| --- | --- |\n| a | b |",
+            text="| h1 | h2 |\n| --- | --- |\n| a | b |",
+            html="<table><tr><td>h1</td></tr></table>",
+        )
+
+
+def _seed_segment_with_table(out_dir: Path) -> None:
+    writer = OutputWriter(out_dir)
+    (out_dir / "pages" / "0").mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (600, 800)).save(out_dir / "pages" / "0" / "page.png")
+    regions = [
+        Region(page=0, bbox=[10.0, 10.0, 200.0, 100.0],
+               region_type=ElementType.TABLE, confidence=0.95,
+               content=ElementContent(caption="Table 1. Demo.")),
+    ]
+    writer.write_segmentation(
+        regions=regions, doc_id="d1", source_file="x.pdf",
+        total_pages=1, segmentation_tool="stub_segmenter",
+    )
+    writer.mark_stage_done("segment")
+
+
+def test_table_role_mismatch_extracts_sidecar(tmp_path: Path):
+    """Bei table_extractor != segmenter ruft Stage 2 den Table-Extractor auf."""
+    out = tmp_path / "doc1"
+    _seed_segment_with_table(out)
+    cfg = _cfg().model_copy(update={"table_extractor": "stub_table"})
+    assert run_text([out], cfg) == 0
+    table_sidecars = list((out / "pages" / "0").glob("*_table.json"))
+    assert len(table_sidecars) == 1
+    data = json.loads(table_sidecars[0].read_text(encoding="utf-8"))
+    assert data["extractor"] == "stub_table"
+    assert data["content"]["markdown"].startswith("| h1")
+    assert data["content"]["caption"] == "Table 1. Demo."
