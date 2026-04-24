@@ -186,7 +186,7 @@ Every element ends up in two places:
   — this is the **source of truth**.
 - **Merged flat list** `content_list.json` — a deterministic, sorted
   rebuild from the sidecars. Can be regenerated anytime via
-  `python -m extraction rebuild outputs/<run>/`.
+  `python -m extraction assemble outputs/<run>/`.
 
 Visual element types (`table`, `formula`, `figure`, `diagram`,
 `technical_drawing`) additionally get a PNG crop alongside their JSON.
@@ -453,9 +453,10 @@ lists which paths are type-checked; any new adapter file inside
 
 ### Step 8 — Smoke-test against a real PDF
 
-    python -m extraction extract docs/fixtures/sample.pdf \
-        --config configs/with_tabulite.yaml \
-        --output outputs/tabulite_smoke/
+    python -m extraction segment docs/fixtures/sample.pdf --config configs/with_tabulite.yaml
+    python -m extraction extract-text outputs/sample
+    python -m extraction describe-figures outputs/sample
+    python -m extraction assemble outputs/sample
 
 Inspect `outputs/tabulite_smoke/content_list.json`. For every `"type":
 "table"` element, check that `"extractor": "tabulite"` and that

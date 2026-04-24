@@ -7,7 +7,7 @@ from pathlib import Path
 
 import extraction.adapters  # noqa: F401 — trigger adapter registration
 
-from .config import DEFAULT_OUTPUT_BASE, ExtractionConfig, load_extraction_config
+from .config import ExtractionConfig, load_extraction_config
 from .stages.assemble import run_assemble
 from .stages.describe_figures import run_figures
 from .stages.extract_text import run_text
@@ -30,7 +30,7 @@ def _parse_args() -> argparse.Namespace:
     seg = sub.add_parser("segment", help="Stage 1: render + segment PDFs")
     seg.add_argument("pdfs", nargs="+", type=Path)
     seg.add_argument("--config", type=Path, default=None)
-    seg.add_argument("--out", type=Path, default=Path(DEFAULT_OUTPUT_BASE))
+    seg.add_argument("--out", type=Path, default=None)
 
     txt = sub.add_parser("extract-text", help="Stage 2: text extraction")
     txt.add_argument("outdirs", nargs="+", type=Path)
@@ -52,7 +52,8 @@ def main() -> None:
     cfg = _load_cfg(getattr(args, "config", None))
 
     if args.command == "segment":
-        sys.exit(run_segment(args.pdfs, cfg, args.out))
+        out_base = args.out if args.out is not None else Path(cfg.output_dir)
+        sys.exit(run_segment(args.pdfs, cfg, out_base))
     if args.command == "extract-text":
         sys.exit(run_text(args.outdirs, cfg))
     if args.command == "describe-figures":

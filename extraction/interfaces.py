@@ -37,8 +37,12 @@ class TextExtractor(Protocol):
     @property
     def tool_name(self) -> str: ...
 
-    def extract(self, page_image: Image, page_number: int) -> ElementContent:
-        """Extract text from a page image. Returns content with text field set."""
+    def extract(self, region_image: Image, page_number: int) -> ElementContent:
+        """Extract text from a region crop. Returns content with text field set.
+
+        The image is a cropped region (heading/paragraph) produced by the
+        pipeline from the rendered page image, not the full page.
+        """
         ...
 
 
@@ -64,6 +68,11 @@ class FigureDescriptor(Protocol):
     @property
     def tool_name(self) -> str: ...
 
-    def describe(self, image: Image) -> str:
-        """Generate a text description of a figure/diagram image."""
+    def describe(self, image: Image, caption: str | None = None) -> str:
+        """Generate a text description of a figure/diagram image.
+
+        ``caption`` carries the Segmenter-detected figure caption when
+        available. Adapters that can use it (VLMs) should treat it as
+        grounding context; simple adapters may ignore it.
+        """
         ...

@@ -12,7 +12,7 @@ from extraction.output import OutputWriter
 from extraction.stages.assemble import run_assemble
 
 
-def _full_seed(out_dir: Path, *, mark_text: bool, mark_fig: bool):
+def _full_seed(out_dir: Path, *, mark_text: bool, mark_fig: bool) -> None:
     writer = OutputWriter(out_dir)
     (out_dir / "pages" / "0").mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (600, 800)).save(out_dir / "pages" / "0" / "page.png")
@@ -47,7 +47,7 @@ def _cfg() -> ExtractionConfig:
     )
 
 
-def test_assemble_happy_path(tmp_path: Path):
+def test_assemble_happy_path(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     _full_seed(out, mark_text=True, mark_fig=True)
     assert run_assemble([out], _cfg()) == 0
@@ -62,7 +62,7 @@ def test_assemble_happy_path(tmp_path: Path):
     assert cl["elements"][0]["reading_order_index"] == 0
 
 
-def test_assemble_missing_prereq_writes_error(tmp_path: Path):
+def test_assemble_missing_prereq_writes_error(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     _full_seed(out, mark_text=False, mark_fig=True)
     assert run_assemble([out], _cfg()) == 1
@@ -71,7 +71,7 @@ def test_assemble_missing_prereq_writes_error(tmp_path: Path):
     assert "extract-text" in err.read_text(encoding="utf-8")
 
 
-def test_assemble_skips_when_marker_exists(tmp_path: Path):
+def test_assemble_skips_when_marker_exists(tmp_path: Path) -> None:
     out = tmp_path / "doc1"
     _full_seed(out, mark_text=True, mark_fig=True)
     OutputWriter(out).mark_stage_done("assemble")

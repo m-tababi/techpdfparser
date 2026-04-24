@@ -1,8 +1,9 @@
 """olmOCR-2 text extractor.
 
-Runs the allenai/olmOCR-2 Vision2Seq model over a rendered page image
-and returns markdown text. Used for the OCR fallback path when the
-segmenter doesn't ship text content itself.
+Runs the allenai/olmOCR-2 Vision2Seq model over a cropped region image
+and returns markdown text. The pipeline crops the region from the
+rendered page before calling this adapter — the crop carries exactly
+the text block, heading, or caption that the segmenter detected.
 
 Model: allenai/olmOCR-2-7B-1025
 Requires: pip install transformers torch olmocr
@@ -22,16 +23,11 @@ from ..models import ElementContent
 from ..registry import register_text_extractor
 
 _OLMOCR_PROMPT = (
-    "Attached is one page of a document that you must process. "
-    "Just return the plain text representation of this document as if you were "
+    "Attached is a cropped region from one page of a technical document. "
+    "Return the plain text representation of this region as if you were "
     "reading it naturally.\n"
-    "Convert equations to LateX and tables to HTML.\n"
-    "If there are any figures or charts, label them with the following markdown "
-    "syntax ![Alt text describing the contents of the figure]"
-    "(page_startx_starty_width_height.png)\n"
-    "Return your output as markdown, with a front matter section on top "
-    "specifying values for the primary_language, is_rotation_valid, "
-    "rotation_correction, is_table, and is_diagram parameters."
+    "Convert equations to LaTeX and tables to HTML.\n"
+    "Do not speculate about content outside the crop."
 )
 _FRONT_MATTER_RE = re.compile(r"^---\s*\n.*?\n---\s*\n?", re.DOTALL)
 _TARGET_LONGEST_DIM = 1288

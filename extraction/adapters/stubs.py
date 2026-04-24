@@ -63,5 +63,5 @@ class NoopFigureDescriptor:
     def tool_name(self) -> str:
         return self.TOOL_NAME
 
-    def describe(self, image: Image) -> str:
+    def describe(self, image: Image, caption: str | None = None) -> str:
         return ""
