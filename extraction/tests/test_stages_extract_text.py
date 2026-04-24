@@ -221,3 +221,43 @@ def test_table_role_mismatch_extracts_sidecar(tmp_path: Path):
     assert data["extractor"] == "stub_table"
     assert data["content"]["markdown"].startswith("| h1")
     assert data["content"]["caption"] == "Table 1. Demo."
+
+
+from extraction.registry import register_formula_extractor
+
+
+@register_formula_extractor("stub_formula")
+class _StubFormula:
+    TOOL_NAME = "stub_formula"
+    def __init__(self, **_): pass
+    @property
+    def tool_name(self): return self.TOOL_NAME
+    def extract(self, region_image, page_number):
+        return ElementContent(latex="E = mc^2", text="E = mc^2")
+
+
+def _seed_segment_with_formula(out_dir: Path) -> None:
+    writer = OutputWriter(out_dir)
+    (out_dir / "pages" / "0").mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (600, 800)).save(out_dir / "pages" / "0" / "page.png")
+    regions = [
+        Region(page=0, bbox=[50.0, 50.0, 150.0, 80.0],
+               region_type=ElementType.FORMULA, confidence=0.95),
+    ]
+    writer.write_segmentation(
+        regions=regions, doc_id="d1", source_file="x.pdf",
+        total_pages=1, segmentation_tool="stub_segmenter",
+    )
+    writer.mark_stage_done("segment")
+
+
+def test_formula_role_mismatch_extracts_sidecar(tmp_path: Path):
+    out = tmp_path / "doc1"
+    _seed_segment_with_formula(out)
+    cfg = _cfg().model_copy(update={"formula_extractor": "stub_formula"})
+    assert run_text([out], cfg) == 0
+    formula_sidecars = list((out / "pages" / "0").glob("*_formula.json"))
+    assert len(formula_sidecars) == 1
+    data = json.loads(formula_sidecars[0].read_text(encoding="utf-8"))
+    assert data["content"]["latex"] == "E = mc^2"
+    assert data["extractor"] == "stub_formula"
