@@ -125,3 +125,28 @@ def test_figures_error_writes_marker_and_continues(tmp_path: Path):
     assert exit_code == 1
     for out in (out_a, out_b):
         assert (out / ".stages" / "describe-figures.error").exists()
+
+
+_captured_captions: list[str | None] = []
+
+
+@register_figure_descriptor("stub_fig_capture")
+class _StubFigCapture:
+    TOOL_NAME = "stub_fig_capture"
+    def __init__(self, **_): pass
+    @property
+    def tool_name(self): return self.TOOL_NAME
+    def describe(self, image, caption=None):
+        _captured_captions.append(caption)
+        return "ok"
+
+
+def test_figures_passes_caption_to_describer(tmp_path: Path):
+    """Stage 3 reicht region.content.caption durch an describe()."""
+    _captured_captions.clear()
+    out = tmp_path / "doc1"
+    _seed_segment(out)  # seed hat FIGURE mit caption="Fig 1", DIAGRAM ohne
+    cfg = _cfg(figure_descriptor="stub_fig_capture")
+    assert run_figures([out], cfg) == 0
+    assert "Fig 1" in _captured_captions
+    assert None in _captured_captions

@@ -101,7 +101,12 @@ def _process_one(
             continue
         page_img = _load_page(out_dir, region.page)
         crop = writer.crop_region(page_img, region.bbox, dpi=cfg.resolve_renderer_dpi())
-        description = describer.describe(crop)  # type: ignore[attr-defined]
+        region_caption = (
+            region.content.caption
+            if region.content is not None
+            else None
+        )
+        description = describer.describe(crop, caption=region_caption)  # type: ignore[attr-defined]
         content = ElementContent(description=description or None)
         if region.content is not None and region.content.caption:
             content.caption = region.content.caption
