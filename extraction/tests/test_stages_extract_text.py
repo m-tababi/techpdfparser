@@ -261,3 +261,28 @@ def test_formula_role_mismatch_extracts_sidecar(tmp_path: Path):
     data = json.loads(formula_sidecars[0].read_text(encoding="utf-8"))
     assert data["content"]["latex"] == "E = mc^2"
     assert data["extractor"] == "stub_formula"
+
+
+@register_table_extractor("stub_table_empty")
+class _StubTableEmpty:
+    TOOL_NAME = "stub_table_empty"
+    def __init__(self, **_): pass
+    @property
+    def tool_name(self): return self.TOOL_NAME
+    def extract(self, region_image, page_number):
+        return ElementContent()
+
+
+def test_table_persists_with_image_path_when_content_empty(tmp_path: Path):
+    """Table mit leerem Extractor-Output persistiert, solange Crop + image_path da sind."""
+    out = tmp_path / "doc1"
+    _seed_segment_with_table(out)
+    cfg = _cfg().model_copy(update={"table_extractor": "stub_table_empty"})
+    assert run_text([out], cfg) == 0
+    table_sidecars = list((out / "pages" / "0").glob("*_table.json"))
+    crops = list((out / "pages" / "0").glob("*_table.png"))
+    assert len(table_sidecars) == 1
+    assert len(crops) == 1
+    data = json.loads(table_sidecars[0].read_text(encoding="utf-8"))
+    assert data["content"]["image_path"].endswith("_table.png")
+    assert data["content"]["caption"] == "Table 1. Demo."

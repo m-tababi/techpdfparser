@@ -131,13 +131,13 @@ def _process_one(
             if not (content.text or "").strip():
                 continue
         else:
-            # TABLE / FORMULA: Crop + image_path werden in Task 7 ergänzt.
-            if not (
-                (content.text or "").strip()
-                or (content.markdown or "").strip()
-                or (content.latex or "").strip()
-            ):
-                continue
+            # TABLE / FORMULA: Crop + image_path persistieren,
+            # auch wenn markdown/latex/text leer sind.
+            rel = writer.save_element_crop(
+                page=region.page, element_id=el_id,
+                element_type=region.region_type.value, image=crop,
+            )
+            content.image_path = str(rel.relative_to(writer.output_dir))
         el = Element(
             element_id=el_id,
             type=region.region_type,
