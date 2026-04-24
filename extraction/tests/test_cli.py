@@ -77,3 +77,53 @@ def test_assemble_dispatches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
 
 def test_unknown_subcommand_exits_nonzero() -> None:
     assert _invoke("nope") in (1, 2)
+
+
+def test_segment_uses_cfg_output_dir_when_out_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne --out greift cfg.output_dir."""
+    calls: dict[str, object] = {}
+
+    def _fake(pdfs: list[Path], cfg: object, output_base: Path) -> int:
+        calls["out"] = output_base
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_segment", _fake)
+
+    from extraction.config import ExtractionConfig
+
+    def _fake_cfg(_: object) -> ExtractionConfig:
+        return ExtractionConfig(output_dir=str(tmp_path / "from_cfg"))
+
+    monkeypatch.setattr("extraction.__main__._load_cfg", _fake_cfg)
+    pdf = tmp_path / "a.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    assert _invoke("segment", str(pdf)) == 0
+    assert calls["out"] == tmp_path / "from_cfg"
+
+
+def test_segment_out_overrides_cfg_output_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Explizites --out hat Vorrang vor cfg.output_dir."""
+    calls: dict[str, object] = {}
+
+    def _fake(pdfs: list[Path], cfg: object, output_base: Path) -> int:
+        calls["out"] = output_base
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_segment", _fake)
+
+    from extraction.config import ExtractionConfig
+
+    def _fake_cfg(_: object) -> ExtractionConfig:
+        return ExtractionConfig(output_dir=str(tmp_path / "from_cfg"))
+
+    monkeypatch.setattr("extraction.__main__._load_cfg", _fake_cfg)
+    pdf = tmp_path / "a.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    assert _invoke("segment", str(pdf), "--out", str(tmp_path / "override")) == 0
+    assert calls["out"] == tmp_path / "override"
