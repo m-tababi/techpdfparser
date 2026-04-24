@@ -31,8 +31,11 @@ Pointers, not duplicated content:
 ## Commands
 
 ```bash
-# Extract a PDF
-python -m extraction extract path/to/document.pdf --config config.yaml --output outputs/
+# Extract a PDF (4-step workflow)
+python -m extraction segment path/to/document.pdf --config config.yaml
+python -m extraction extract-text outputs/document
+python -m extraction describe-figures outputs/document
+python -m extraction assemble outputs/document
 
 # Tests / lint / types
 pytest -q

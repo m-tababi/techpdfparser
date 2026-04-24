@@ -1,6 +1,6 @@
 # Extraction Output Format
 
-Stabile Spezifikation des Outputs, den `python -m extraction extract <pdf>` produziert.
+Stabile Spezifikation des Outputs, den der 4-stufige Workflow (`python -m extraction segment|extract-text|describe-figures|assemble`) produziert.
 Dieser Kontrakt ist die Schnittstelle zwischen dem Extraction-Block (Layer 1) und allen
 nachgelagerten Blöcken (Embedding, Storage, Agent). Tools können ausgetauscht werden, das
 Format bleibt stabil.
@@ -52,7 +52,7 @@ sortiert nach `(page, reading_order_index, element_id)` und mit neu durchnummeri
 Sidecars rekonstruieren:
 
 ```bash
-python -m extraction rebuild outputs/<run>/
+python -m extraction assemble outputs/<run>/
 ```
 
 Der Vorteil: Wenn ein einzelner Extractor verbessert werden soll (z. B. Formel-LaTeX
@@ -143,11 +143,17 @@ Rohe Regionen des Segmenters **vor** jeder Content-Extraktion. Debug- und
 Vergleichszweck (zwei Segmenter gegeneinander laufen lassen, Layout-Treffer prüfen).
 
 ```jsonc
-[
-  {"page": 0, "bbox": [x0, y0, x1, y1], "region_type": "heading", "confidence": 0.99},
-  {"page": 0, "bbox": [x0, y0, x1, y1], "region_type": "text",    "confidence": 0.95},
-  {"page": 1, "bbox": [x0, y0, x1, y1], "region_type": "table",   "confidence": 0.93, "content": {"markdown": "..."}}
-]
+{
+  "doc_id": "sha256-16-hex",
+  "source_file": "druckbericht.pdf",
+  "total_pages": 3,
+  "segmentation_tool": "mineru25",
+  "regions": [
+    {"page": 0, "bbox": [x0, y0, x1, y1], "region_type": "heading", "confidence": 0.99, "reading_order_index": 0},
+    {"page": 0, "bbox": [x0, y0, x1, y1], "region_type": "text",    "confidence": 0.95, "reading_order_index": 1},
+    {"page": 1, "bbox": [x0, y0, x1, y1], "region_type": "table",   "confidence": 0.93, "reading_order_index": 2, "content": {"markdown": "..."}}
+  ]
+}
 ```
 
 Wenn der Segmenter bereits Content mitliefert (MinerU z. B. füllt Tabellen-Markdown
