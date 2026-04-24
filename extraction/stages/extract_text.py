@@ -97,13 +97,19 @@ def _process_one(
             continue
         if region.confidence < cfg.confidence_threshold:
             continue
+        el_id = _element_id(doc_id, region)
+        sidecar = (
+            out_dir / "pages" / str(region.page)
+            / f"{el_id}_{region.region_type.value}.json"
+        )
+        if sidecar.exists():
+            continue
         page_img = _load_page(out_dir, region.page)
         content: ElementContent = extractor.extract(page_img, region.page)  # type: ignore[attr-defined]
         if region.content is not None and region.content.caption:
             content.caption = region.content.caption
         if not (content.text or "").strip():
             continue
-        el_id = _element_id(doc_id, region)
         el = Element(
             element_id=el_id,
             type=region.region_type,

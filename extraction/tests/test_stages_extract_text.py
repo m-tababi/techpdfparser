@@ -116,3 +116,35 @@ def test_text_error_writes_marker_and_continues(tmp_path: Path):
     for out in (out_a, out_b):
         assert (out / ".stages" / "extract-text.error").exists()
         assert not (out / ".stages" / "extract-text.done").exists()
+
+
+def test_text_skips_region_when_sidecar_already_exists(tmp_path: Path, monkeypatch):
+    """Region mit existierendem Sidecar (Stage-1-Passthrough) wird nicht re-extracted."""
+    out = tmp_path / "doc1"
+    _seed_segment(out)
+
+    # Existing sidecar simulieren (als hätte Stage 1 das im Role-Match-Pfad
+    # geschrieben). Sidecar-Name: <element_id>_text.json im pages/0/.
+    import hashlib
+    meta = OutputWriter(out).read_segmentation()
+    text_region = next(r for r in meta["regions"] if r.region_type == ElementType.TEXT)
+    x0, y0, x1, y1 = (round(v) for v in text_region.bbox)
+    raw = f"{meta['doc_id']}:{text_region.page}:{text_region.region_type.value}:{x0},{y0},{x1},{y1}"
+    el_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
+    sidecar = out / "pages" / "0" / f"{el_id}_text.json"
+    sidecar.write_text(
+        '{"element_id":"' + el_id + '","type":"text","page":0,'
+        '"bbox":[10.0,20.0,100.0,60.0],"reading_order_index":0,'
+        '"section_path":[],"confidence":0.9,"extractor":"stub_segmenter",'
+        '"content":{"text":"from stage 1 passthrough"}}',
+        encoding="utf-8",
+    )
+    mtime_before = sidecar.stat().st_mtime_ns
+
+    exit_code = run_text([out], _cfg())
+    assert exit_code == 0
+    # Sidecar darf nicht überschrieben worden sein.
+    assert sidecar.stat().st_mtime_ns == mtime_before
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert data["extractor"] == "stub_segmenter"
+    assert data["content"]["text"] == "from stage 1 passthrough"
