@@ -148,3 +148,31 @@ def test_text_skips_region_when_sidecar_already_exists(tmp_path: Path, monkeypat
     data = json.loads(sidecar.read_text(encoding="utf-8"))
     assert data["extractor"] == "stub_segmenter"
     assert data["content"]["text"] == "from stage 1 passthrough"
+
+
+_captured_text_sizes: list[tuple[int, int]] = []
+
+
+@register_text_extractor("stub_text_capture")
+class _StubTextCapture:
+    TOOL_NAME = "stub_text_capture"
+    def __init__(self, **_): pass
+    @property
+    def tool_name(self): return self.TOOL_NAME
+    def extract(self, image, page_number):
+        _captured_text_sizes.append(image.size)
+        return ElementContent(text="ok")
+
+
+def test_text_extractor_receives_region_crop(tmp_path: Path):
+    """TextExtractor bekommt Region-Crop, nicht die Vollseite."""
+    _captured_text_sizes.clear()
+    out = tmp_path / "doc1"
+    _seed_segment(out)
+    cfg = _cfg().model_copy(update={"text_extractor": "stub_text_capture"})
+    assert run_text([out], cfg) == 0
+    assert _captured_text_sizes, "extractor nicht aufgerufen"
+    for w, h in _captured_text_sizes:
+        assert (w, h) != (600, 800), (
+            f"extractor bekam Vollseite {(w, h)}, nicht Crop"
+        )

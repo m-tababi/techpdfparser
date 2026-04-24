@@ -105,7 +105,10 @@ def _process_one(
         if sidecar.exists():
             continue
         page_img = _load_page(out_dir, region.page)
-        content: ElementContent = extractor.extract(page_img, region.page)  # type: ignore[attr-defined]
+        crop = writer.crop_region(
+            page_img, region.bbox, dpi=cfg.resolve_renderer_dpi()
+        )
+        content: ElementContent = extractor.extract(crop, region.page)  # type: ignore[attr-defined]
         if region.content is not None and region.content.caption:
             content.caption = region.content.caption
         if not (content.text or "").strip():
