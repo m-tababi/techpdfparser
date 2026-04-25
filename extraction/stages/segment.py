@@ -37,6 +37,44 @@ def _role_tool_name(region_type: ElementType, cfg: ExtractionConfig) -> str:
     return cfg.figure_descriptor
 
 
+def _stage_config(cfg: ExtractionConfig) -> dict:
+    return {
+        "renderer": cfg.renderer,
+        "segmenter": cfg.segmenter,
+        "text_extractor": cfg.text_extractor,
+        "table_extractor": cfg.table_extractor,
+        "formula_extractor": cfg.formula_extractor,
+        "figure_descriptor": cfg.figure_descriptor,
+        "confidence_threshold": cfg.confidence_threshold,
+        "renderer_config": cfg.get_adapter_config(cfg.renderer),
+        "segmenter_config": cfg.get_adapter_config(cfg.segmenter),
+    }
+
+
+def _validate_existing_output(
+    pdf: Path,
+    writer: OutputWriter,
+    cfg: ExtractionConfig,
+    render_dpi: int,
+) -> None:
+    meta = writer.read_segmentation()
+    mismatches: list[str] = []
+    if meta["doc_id"] != _doc_id(pdf):
+        mismatches.append("doc_id")
+    if meta["source_file"] != pdf.name:
+        mismatches.append("source_file")
+    if meta.get("render_dpi") != render_dpi:
+        mismatches.append("render_dpi")
+    if meta.get("stage_config") != _stage_config(cfg):
+        mismatches.append("stage_config")
+    if mismatches:
+        joined = ", ".join(mismatches)
+        raise RuntimeError(
+            f"Existing output does not match current segment inputs/config: {joined}. "
+            "Use a fresh output directory or delete the stale artefacts."
+        )
+
+
 def run_segment(
     pdf_paths: list[Path],
     cfg: ExtractionConfig,
@@ -44,22 +82,33 @@ def run_segment(
 ) -> int:
     plan: list[tuple[Path, Path, OutputWriter]] = []
     outcomes: list[StageOutcome] = []
+    render_dpi = cfg.resolve_renderer_dpi()
     for pdf in pdf_paths:
         out_dir = output_base / pdf.stem
         pre_existed = out_dir.exists() and any(out_dir.iterdir())
         writer = OutputWriter(out_dir)
         label = str(out_dir)
         if writer.is_stage_done(_STAGE):
-            outcomes.append(StageOutcome(label=label, status="skipped"))
-            print(f"Processing {label} ... ↷ skipped (already done)")
+            try:
+                _validate_existing_output(pdf, writer, cfg, render_dpi)
+                outcomes.append(StageOutcome(label=label, status="skipped"))
+                print(f"Processing {label} ... ↷ skipped (already done)")
+            except Exception as error:
+                writer.write_stage_error(_STAGE, error)
+                outcomes.append(StageOutcome(
+                    label=label,
+                    status="error",
+                    detail=f"(stale output; siehe .stages/{_STAGE}.error)",
+                ))
+                print(f"Processing {label} ... ✗ stale output")
             continue
         if pre_existed:
-            exc = FileExistsError(
+            dirty_output_error = FileExistsError(
                 f"Output directory '{out_dir}' already contains artefacts but "
                 f"'.stages/{_STAGE}.done' is missing. Delete the directory or "
                 f"its orphaned contents before re-running segment."
             )
-            writer.write_stage_error(_STAGE, exc)
+            writer.write_stage_error(_STAGE, dirty_output_error)
             outcomes.append(StageOutcome(
                 label=label, status="error",
                 detail=f"(Ordner nicht leer, kein segment.done; siehe .stages/{_STAGE}.error)",
@@ -69,11 +118,14 @@ def run_segment(
         plan.append((pdf, out_dir, writer))
 
     if not plan:
-        ok_out_dirs = [output_base / p.stem for p in pdf_paths]
+        ok_out_dirs = [
+            output_base / p.stem for p in pdf_paths
+            if (output_base / p.stem / ".stages" / f"{_STAGE}.done").exists()
+        ]
         return print_stage_summary(_STAGE, outcomes, ok_out_dirs)
 
     renderer_kwargs = dict(cfg.get_adapter_config(cfg.renderer))
-    renderer_kwargs["dpi"] = cfg.resolve_renderer_dpi()
+    renderer_kwargs["dpi"] = render_dpi
     renderer = get_renderer(cfg.renderer, **renderer_kwargs)
     segmenter = get_segmenter(cfg.segmenter, **cfg.get_adapter_config(cfg.segmenter))
 
@@ -126,6 +178,8 @@ def _process_one(
         source_file=pdf_path.name,
         total_pages=page_count,
         segmentation_tool=segmenter.tool_name,  # type: ignore[attr-defined]
+        render_dpi=cfg.resolve_renderer_dpi(),
+        stage_config=_stage_config(cfg),
     )
 
     seg_tool = segmenter.tool_name  # type: ignore[attr-defined]

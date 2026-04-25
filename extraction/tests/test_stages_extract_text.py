@@ -48,7 +48,7 @@ def _seed_segment(out_dir: Path) -> None:
     ]
     writer.write_segmentation(
         regions=regions, doc_id="d1", source_file="x.pdf",
-        total_pages=1, segmentation_tool="stub_segmenter",
+        total_pages=1, segmentation_tool="stub_segmenter", render_dpi=72,
     )
     writer.mark_stage_done("segment")
 
@@ -209,7 +209,7 @@ def _seed_segment_with_table(out_dir: Path) -> None:
     ]
     writer.write_segmentation(
         regions=regions, doc_id="d1", source_file="x.pdf",
-        total_pages=1, segmentation_tool="stub_segmenter",
+        total_pages=1, segmentation_tool="stub_segmenter", render_dpi=72,
     )
     writer.mark_stage_done("segment")
 
@@ -248,7 +248,7 @@ def _seed_segment_with_formula(out_dir: Path) -> None:
     ]
     writer.write_segmentation(
         regions=regions, doc_id="d1", source_file="x.pdf",
-        total_pages=1, segmentation_tool="stub_segmenter",
+        total_pages=1, segmentation_tool="stub_segmenter", render_dpi=72,
     )
     writer.mark_stage_done("segment")
 
@@ -288,3 +288,39 @@ def test_table_persists_with_image_path_when_content_empty(tmp_path: Path) -> No
     data = json.loads(table_sidecars[0].read_text(encoding="utf-8"))
     assert data["content"]["image_path"].endswith("_table.png")
     assert data["content"]["caption"] == "Table 1. Demo."
+
+
+def test_text_uses_render_dpi_from_segmentation(tmp_path: Path) -> None:
+    _captured_text_sizes.clear()
+    out = tmp_path / "doc1"
+    _seed_segment(out)
+    meta = json.loads((out / "segmentation.json").read_text(encoding="utf-8"))
+    meta["render_dpi"] = 144
+    (out / "segmentation.json").write_text(json.dumps(meta), encoding="utf-8")
+    cfg = _cfg().model_copy(update={"text_extractor": "stub_text_capture", "dpi": 72})
+
+    assert run_text([out], cfg) == 0
+
+    assert _captured_text_sizes[0] == (180, 80)
+
+
+def test_text_force_rewrites_existing_sidecar_and_clears_assemble(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "doc1"
+    _seed_segment(out)
+    assert run_text([out], _cfg()) == 0
+    OutputWriter(out).mark_stage_done("assemble")
+
+    sidecar = next((out / "pages" / "0").glob("*_text.json"))
+    original = json.loads(sidecar.read_text(encoding="utf-8"))
+    sidecar.write_text(
+        json.dumps(original | {"extractor": "old"}),
+        encoding="utf-8",
+    )
+
+    assert run_text([out], _cfg(), force=True) == 0
+
+    rewritten = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert rewritten["extractor"] == "stub_text"
+    assert not (out / ".stages" / "assemble.done").exists()

@@ -86,6 +86,10 @@ def test_segment_happy_path(tmp_path: Path) -> None:
     seg = json.loads((out / "segmentation.json").read_text(encoding="utf-8"))
     assert seg["segmentation_tool"] == "stub_segmenter"
     assert seg["total_pages"] == 2
+    assert seg["render_dpi"] == 150
+    assert seg["stage_config"]["renderer"] == "stub_renderer"
+    assert seg["stage_config"]["segmenter"] == "stub_segmenter"
+    assert seg["stage_config"]["table_extractor"] == "stub_segmenter"
     assert len(seg["regions"]) == 2
 
     table_sidecars = list((out / "pages" / "1").glob("*_table.json"))
@@ -119,9 +123,7 @@ def test_segment_skips_when_marker_exists(tmp_path: Path, monkeypatch: pytest.Mo
     pdf = tmp_path / "sample.pdf"
     pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
     cfg = _make_cfg()
-
-    (tmp_path / "outputs" / "sample" / ".stages").mkdir(parents=True)
-    (tmp_path / "outputs" / "sample" / ".stages" / "segment.done").touch()
+    assert run_segment([pdf], cfg, output_base=tmp_path / "outputs") == 0
 
     from extraction.stages import segment as seg_mod
 
@@ -131,6 +133,46 @@ def test_segment_skips_when_marker_exists(tmp_path: Path, monkeypatch: pytest.Mo
 
     exit_code = run_segment([pdf], cfg, output_base=tmp_path / "outputs")
     assert exit_code == 0
+
+
+def test_segment_done_with_stale_config_writes_error_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    pdf = tmp_path / "sample.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
+    cfg = _make_cfg()
+    output_base = tmp_path / "outputs"
+    assert run_segment([pdf], cfg, output_base=output_base) == 0
+
+    out = output_base / "sample"
+    page_image = out / "pages" / "0" / "page.png"
+    mtime_before = page_image.stat().st_mtime_ns
+
+    stale_cfg = cfg.model_copy(update={"confidence_threshold": 0.7})
+    exit_code = run_segment([pdf], stale_cfg, output_base=output_base)
+
+    assert exit_code == 1
+    err = out / ".stages" / "segment.error"
+    assert err.exists()
+    assert "stage_config" in err.read_text(encoding="utf-8")
+    assert page_image.stat().st_mtime_ns == mtime_before
+    assert not (out / ".stages" / "segment.done").exists()
+
+
+def test_segment_done_with_changed_pdf_writes_error(tmp_path: Path) -> None:
+    pdf = tmp_path / "sample.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n% dummy\n")
+    cfg = _make_cfg()
+    output_base = tmp_path / "outputs"
+    assert run_segment([pdf], cfg, output_base=output_base) == 0
+
+    pdf.write_bytes(b"%PDF-1.4\n% changed\n")
+    exit_code = run_segment([pdf], cfg, output_base=output_base)
+
+    assert exit_code == 1
+    err = output_base / "sample" / ".stages" / "segment.error"
+    assert err.exists()
+    assert "doc_id" in err.read_text(encoding="utf-8")
 
 
 @register_segmenter("stub_broken")

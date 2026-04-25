@@ -57,7 +57,7 @@ def _seed_segment(out_dir: Path) -> None:
     ]
     writer.write_segmentation(
         regions=regions, doc_id="d1", source_file="x.pdf",
-        total_pages=1, segmentation_tool="stub_segmenter",
+        total_pages=1, segmentation_tool="stub_segmenter", render_dpi=72,
     )
     writer.mark_stage_done("segment")
 
@@ -151,3 +151,39 @@ def test_figures_passes_caption_to_describer(tmp_path: Path) -> None:
     assert run_figures([out], cfg) == 0
     assert "Fig 1" in _captured_captions
     assert None in _captured_captions
+
+
+def test_figures_uses_render_dpi_from_segmentation(tmp_path: Path) -> None:
+    out = tmp_path / "doc1"
+    _seed_segment(out)
+    meta = json.loads((out / "segmentation.json").read_text(encoding="utf-8"))
+    meta["render_dpi"] = 144
+    (out / "segmentation.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    assert run_figures([out], _cfg()) == 0
+
+    fig_sidecar = next((out / "pages" / "0").glob("*_figure.json"))
+    fig = json.loads(fig_sidecar.read_text(encoding="utf-8"))
+    assert "(200, 200)" in fig["content"]["description"]
+
+
+def test_figures_force_rewrites_existing_sidecar_and_clears_assemble(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "doc1"
+    _seed_segment(out)
+    assert run_figures([out], _cfg()) == 0
+    OutputWriter(out).mark_stage_done("assemble")
+
+    sidecar = next((out / "pages" / "0").glob("*_figure.json"))
+    original = json.loads(sidecar.read_text(encoding="utf-8"))
+    sidecar.write_text(
+        json.dumps(original | {"extractor": "old"}),
+        encoding="utf-8",
+    )
+
+    assert run_figures([out], _cfg(), force=True) == 0
+
+    rewritten = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert rewritten["extractor"] == "stub_fig"
+    assert not (out / ".stages" / "assemble.done").exists()

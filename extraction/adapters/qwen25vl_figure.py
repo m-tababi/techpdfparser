@@ -21,7 +21,11 @@ _DESCRIBE_PROMPT_BASE = (
     "Describe this figure from a technical document concisely. "
     "Identify the visualization type (chart, diagram, graph, schematic, etc.), "
     "what data or concept it shows, and any key values or trends visible. "
-    "Be specific and technical. Two to four sentences maximum."
+    "Be specific and technical. Two to four sentences maximum. "
+    "If labels, axes, units, or the subject are unclear or not readable, say "
+    "'unclear' or 'not readable' instead of guessing. Do not infer a domain, "
+    "algorithm, or meaning that is not visible in the crop or stated in the "
+    "provided source context."
 )
 
 

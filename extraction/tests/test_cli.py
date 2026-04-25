@@ -36,29 +36,59 @@ def test_segment_dispatches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 def test_text_dispatches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     calls: dict[str, object] = {}
 
-    def _fake(dirs: list[Path], cfg: object) -> int:
-        calls["args"] = list(dirs)
+    def _fake(dirs: list[Path], cfg: object, *, force: bool = False) -> int:
+        calls["args"] = (list(dirs), force)
         return 0
 
     monkeypatch.setattr("extraction.__main__.run_text", _fake)
     d = tmp_path / "d1"
     d.mkdir()
     assert _invoke("extract-text", str(d)) == 0
-    assert calls["args"] == [d]
+    assert calls["args"] == ([d], False)
+
+
+def test_text_dispatches_force(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: dict[str, object] = {}
+
+    def _fake(dirs: list[Path], cfg: object, *, force: bool = False) -> int:
+        calls["args"] = (list(dirs), force)
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_text", _fake)
+    d = tmp_path / "d1"
+    d.mkdir()
+    assert _invoke("extract-text", "--force", str(d)) == 0
+    assert calls["args"] == ([d], True)
 
 
 def test_figures_dispatches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     calls: dict[str, object] = {}
 
-    def _fake(dirs: list[Path], cfg: object) -> int:
-        calls["args"] = list(dirs)
+    def _fake(dirs: list[Path], cfg: object, *, force: bool = False) -> int:
+        calls["args"] = (list(dirs), force)
         return 0
 
     monkeypatch.setattr("extraction.__main__.run_figures", _fake)
     d = tmp_path / "d1"
     d.mkdir()
     assert _invoke("describe-figures", str(d)) == 0
-    assert calls["args"] == [d]
+    assert calls["args"] == ([d], False)
+
+
+def test_figures_dispatches_force(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: dict[str, object] = {}
+
+    def _fake(dirs: list[Path], cfg: object, *, force: bool = False) -> int:
+        calls["args"] = (list(dirs), force)
+        return 0
+
+    monkeypatch.setattr("extraction.__main__.run_figures", _fake)
+    d = tmp_path / "d1"
+    d.mkdir()
+    assert _invoke("describe-figures", "--force", str(d)) == 0
+    assert calls["args"] == ([d], True)
 
 
 def test_assemble_dispatches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

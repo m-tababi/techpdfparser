@@ -74,28 +74,29 @@ class MinerU25Segmenter:
         self._load()
         assert self._do_parse is not None
 
-        output_dir = Path(tempfile.mkdtemp(prefix="techpdf_mineru_"))
         pdf_bytes = pdf_path.read_bytes()
-        self._do_parse(
-            output_dir=str(output_dir),
-            pdf_file_names=[pdf_path.name],
-            pdf_bytes_list=[pdf_bytes],
-            p_lang_list=[""],
-            backend="pipeline",
-            parse_method="auto",
-            formula_enable=True,
-            table_enable=True,
-            f_draw_layout_bbox=False,
-            f_draw_span_bbox=False,
-            f_dump_md=False,
-            f_dump_middle_json=True,
-            f_dump_model_output=False,
-            f_dump_orig_pdf=False,
-            f_dump_content_list=False,
-        )
+        with tempfile.TemporaryDirectory(prefix="techpdf_mineru_") as tmp_dir:
+            output_dir = Path(tmp_dir)
+            self._do_parse(
+                output_dir=str(output_dir),
+                pdf_file_names=[pdf_path.name],
+                pdf_bytes_list=[pdf_bytes],
+                p_lang_list=[""],
+                backend="pipeline",
+                parse_method="auto",
+                formula_enable=True,
+                table_enable=True,
+                f_draw_layout_bbox=False,
+                f_draw_span_bbox=False,
+                f_dump_md=False,
+                f_dump_middle_json=True,
+                f_dump_model_output=False,
+                f_dump_orig_pdf=False,
+                f_dump_content_list=False,
+            )
 
-        middle_json_path = _find_middle_json(output_dir)
-        raw = json.loads(middle_json_path.read_text(encoding="utf-8"))
+            middle_json_path = _find_middle_json(output_dir)
+            raw = json.loads(middle_json_path.read_text(encoding="utf-8"))
 
         regions: list[Region] = []
         for page_number, block, layout_dets in _iter_para_blocks(raw):

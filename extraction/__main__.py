@@ -35,10 +35,12 @@ def _parse_args() -> argparse.Namespace:
     txt = sub.add_parser("extract-text", help="Stage 2: text extraction")
     txt.add_argument("outdirs", nargs="+", type=Path)
     txt.add_argument("--config", type=Path, default=None)
+    txt.add_argument("--force", action="store_true")
 
     fig = sub.add_parser("describe-figures", help="Stage 3: figure descriptions")
     fig.add_argument("outdirs", nargs="+", type=Path)
     fig.add_argument("--config", type=Path, default=None)
+    fig.add_argument("--force", action="store_true")
 
     asm = sub.add_parser("assemble", help="Stage 4: build content_list.json")
     asm.add_argument("outdirs", nargs="+", type=Path)
@@ -55,9 +57,9 @@ def main() -> None:
         out_base = args.out if args.out is not None else Path(cfg.output_dir)
         sys.exit(run_segment(args.pdfs, cfg, out_base))
     if args.command == "extract-text":
-        sys.exit(run_text(args.outdirs, cfg))
+        sys.exit(run_text(args.outdirs, cfg, force=args.force))
     if args.command == "describe-figures":
-        sys.exit(run_figures(args.outdirs, cfg))
+        sys.exit(run_figures(args.outdirs, cfg, force=args.force))
     if args.command == "assemble":
         sys.exit(run_assemble(args.outdirs, cfg))
     print(f"Unknown command: {args.command}")

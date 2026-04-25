@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from extraction.adapters.mineru25_segmenter import (
+    MinerU25Segmenter,
     _block_to_region,
     _confidence_for_block,
 )
@@ -102,3 +106,26 @@ def test_table_block_keeps_raw_html_with_rowspan_colspan() -> None:
     # markdown stays as the flat fallback
     assert region.content.markdown is not None
     assert "Mat" in region.content.markdown
+
+
+def test_mineru_segmenter_cleans_temporary_parse_dir(tmp_path: Path) -> None:
+    pdf = tmp_path / "sample.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    seen_output_dirs: list[Path] = []
+
+    def _fake_do_parse(**kwargs: object) -> None:
+        output_dir = Path(str(kwargs["output_dir"]))
+        seen_output_dirs.append(output_dir)
+        middle_dir = output_dir / "sample.pdf" / "auto"
+        middle_dir.mkdir(parents=True)
+        (middle_dir / "sample_middle.json").write_text(
+            json.dumps({"pdf_info": []}),
+            encoding="utf-8",
+        )
+
+    adapter = MinerU25Segmenter()
+    adapter._do_parse = _fake_do_parse
+
+    assert adapter.segment(pdf) == []
+    assert seen_output_dirs
+    assert not seen_output_dirs[0].exists()

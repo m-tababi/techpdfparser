@@ -49,6 +49,8 @@ class OutputWriter:
         source_file: str,
         total_pages: int,
         segmentation_tool: str,
+        render_dpi: int | None = None,
+        stage_config: dict | None = None,
     ) -> Path:
         """Write segmentation.json with doc metadata + region list."""
         path = self.output_dir / "segmentation.json"
@@ -59,6 +61,10 @@ class OutputWriter:
             "segmentation_tool": segmentation_tool,
             "regions": [r.model_dump(mode="json", exclude_none=True) for r in regions],
         }
+        if render_dpi is not None:
+            data["render_dpi"] = render_dpi
+        if stage_config is not None:
+            data["stage_config"] = stage_config
         path.write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
@@ -75,6 +81,8 @@ class OutputWriter:
             "source_file": raw["source_file"],
             "total_pages": raw["total_pages"],
             "segmentation_tool": raw["segmentation_tool"],
+            "render_dpi": raw.get("render_dpi"),
+            "stage_config": raw.get("stage_config"),
             "regions": [Region.model_validate(r) for r in raw["regions"]],
         }
 
@@ -133,6 +141,11 @@ class OutputWriter:
             err.unlink()
         done.touch()
         return done
+
+    def clear_stage_done(self, stage_name: str) -> None:
+        done = self._stages_dir() / f"{stage_name}.done"
+        if done.exists():
+            done.unlink()
 
     def write_stage_error(self, stage_name: str, exc: BaseException) -> Path:
         err = self._stages_dir() / f"{stage_name}.error"

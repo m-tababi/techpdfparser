@@ -96,8 +96,8 @@ Optionale Felder in `content` — welches gesetzt ist, hängt vom `type` ab:
 |---------------------|----------------------------------------------------------|
 | text                | `text`                                                   |
 | heading             | `text`                                                   |
-| table               | `markdown`, `html`, `text`, `image_path`, ggf. `caption` |
-| formula             | `latex`, `text`, `image_path`                            |
+| table               | `image_path`, idealerweise `markdown`, `html`, `text`, ggf. `caption` |
+| formula             | `image_path`, idealerweise `latex`, `text`               |
 | figure              | `description`, `image_path`, ggf. `caption`              |
 | diagram             | `description`, `image_path`, ggf. `caption`              |
 | technical_drawing   | `description`, `image_path`, ggf. `caption`              |
@@ -148,6 +148,18 @@ Vergleichszweck (zwei Segmenter gegeneinander laufen lassen, Layout-Treffer prü
   "source_file": "druckbericht.pdf",
   "total_pages": 3,
   "segmentation_tool": "mineru25",
+  "render_dpi": 150,
+  "stage_config": {
+    "renderer": "pymupdf",
+    "segmenter": "mineru25",
+    "text_extractor": "mineru25",
+    "table_extractor": "mineru25",
+    "formula_extractor": "mineru25",
+    "figure_descriptor": "qwen25vl",
+    "confidence_threshold": 0.3,
+    "renderer_config": {},
+    "segmenter_config": {}
+  },
   "regions": [
     {"page": 0, "bbox": [x0, y0, x1, y1], "region_type": "heading", "confidence": 0.99, "reading_order_index": 0},
     {"page": 0, "bbox": [x0, y0, x1, y1], "region_type": "text",    "confidence": 0.95, "reading_order_index": 1},
@@ -158,6 +170,12 @@ Vergleichszweck (zwei Segmenter gegeneinander laufen lassen, Layout-Treffer prü
 
 Wenn der Segmenter bereits Content mitliefert (MinerU z. B. füllt Tabellen-Markdown
 direkt), steht dieser hier mit drin — genau so wie die Pipeline ihn übernimmt.
+
+`render_dpi` ist die effektive DPI des gerenderten `page.png`. Nachgelagerte
+Stages verwenden diesen Wert beim Cropping, nicht die eventuell inzwischen
+geänderte aktuelle Config. `stage_config` ist ein kleiner Fingerprint der
+für Stage 1 relevanten Adapter- und Threshold-Auswahl; `segment` nutzt ihn,
+um stale Outputs mit existierendem `segment.done` sicher zu erkennen.
 
 ## Merge-Regeln
 
@@ -184,10 +202,10 @@ Ablauf pro Region:
    `region.content` (Tool-Match-Optimierung — gleiches Tool, kein Re-Run nötig).
    Sonst: Pipeline cropped das Seitenbild und ruft das Role-Tool.
 3. `caption` aus dem Segmenter bleibt in jedem Fall erhalten.
-4. Ein Role-Tool-Output mit leerem Pflichtfeld (leerer Text, kein
-   Markdown/Text bei Tabellen, kein LaTeX/Text bei Formeln) wird als
-   „keine Daten" gewertet und das Element gedroppt. Visuelle Elemente
-   dürfen persistieren, solange ein `image_path` vorhanden ist.
+4. Ein Role-Tool-Output mit leerem Pflichtfeld wird gedroppt, wenn keine
+   visuelle Evidenz existiert. Tabellen und Formeln dürfen als Crop-only
+   Fallback persistieren, solange ein `image_path` vorhanden ist; Text und
+   Headings ohne Text werden gedroppt.
 
 Beispiele:
 

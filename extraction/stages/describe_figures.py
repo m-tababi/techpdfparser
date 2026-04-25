@@ -27,14 +27,16 @@ def _element_id(doc_id: str, region: Region) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
-def run_figures(out_dirs: list[Path], cfg: ExtractionConfig) -> int:
+def run_figures(
+    out_dirs: list[Path], cfg: ExtractionConfig, *, force: bool = False
+) -> int:
     plan: list[tuple[Path, OutputWriter, dict]] = []
     outcomes: list[StageOutcome] = []
 
     for out_dir in out_dirs:
         writer = OutputWriter(out_dir)
         label = str(out_dir)
-        if writer.is_stage_done(_STAGE):
+        if writer.is_stage_done(_STAGE) and not force:
             outcomes.append(StageOutcome(label=label, status="skipped"))
             print(f"Processing {label} ... ↷ skipped (already done)")
             continue
@@ -62,7 +64,8 @@ def run_figures(out_dirs: list[Path], cfg: ExtractionConfig) -> int:
     for out_dir, writer, meta in plan:
         label = str(out_dir)
         try:
-            _process_one(out_dir, writer, meta, describer, cfg)
+            _process_one(out_dir, writer, meta, describer, cfg, force=force)
+            writer.clear_stage_done("assemble")
             writer.mark_stage_done(_STAGE)
             outcomes.append(StageOutcome(label=label, status="success"))
             print(f"Processing {label} ... ✓")
@@ -91,16 +94,33 @@ def _process_one(
     meta: dict,
     describer: object,
     cfg: ExtractionConfig,
+    *,
+    force: bool = False,
 ) -> None:
     regions: list[Region] = meta["regions"]
     doc_id: str = meta["doc_id"]
+    render_dpi = int(meta.get("render_dpi") or cfg.resolve_renderer_dpi())
     for region in regions:
         if region.region_type not in _TARGET_TYPES:
             continue
         if region.confidence < cfg.confidence_threshold:
             continue
+        el_id = _element_id(doc_id, region)
+        sidecar = (
+            out_dir / "pages" / str(region.page)
+            / f"{el_id}_{region.region_type.value}.json"
+        )
+        crop_path = (
+            out_dir / "pages" / str(region.page)
+            / f"{el_id}_{region.region_type.value}.png"
+        )
+        if force:
+            if sidecar.exists():
+                sidecar.unlink()
+            if crop_path.exists():
+                crop_path.unlink()
         page_img = _load_page(out_dir, region.page)
-        crop = writer.crop_region(page_img, region.bbox, dpi=cfg.resolve_renderer_dpi())
+        crop = writer.crop_region(page_img, region.bbox, dpi=render_dpi)
         region_caption = (
             region.content.caption
             if region.content is not None
@@ -111,7 +131,6 @@ def _process_one(
         if region.content is not None and region.content.caption:
             content.caption = region.content.caption
 
-        el_id = _element_id(doc_id, region)
         rel = writer.save_element_crop(
             page=region.page, element_id=el_id,
             element_type=region.region_type.value, image=crop,
