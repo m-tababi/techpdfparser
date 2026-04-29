@@ -25,3 +25,18 @@ try:
     from . import qwen25vl_figure  # noqa: F401
 except ImportError as exc:
     log.debug("qwen25vl_figure not registered: %s", exc)
+
+try:
+    from . import qwen25vl_table  # noqa: F401
+except ImportError as exc:
+    log.debug("qwen25vl_table not registered: %s", exc)
+
+try:
+    from . import tatr_table  # noqa: F401
+except ImportError as exc:
+    log.debug("tatr_table not registered: %s", exc)
+
+try:
+    from . import docling_table  # noqa: F401
+except ImportError as exc:
+    log.debug("docling_table not registered: %s", exc)
