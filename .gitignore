@@ -65,6 +65,7 @@ logs/
 data/
 output/
 outputs/
+outputs_*/
 
 # Local config (copy of config.example.yaml)
 config.yaml
