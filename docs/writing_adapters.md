@@ -25,15 +25,16 @@ Figure-Descriptor) im Extraction-Block.
 
 4. **Merge-Regel beachten (Extractor-Rollen).**
    Ein Extractor gibt nur Content-Felder zurück (`text`, `markdown`,
-   `latex`, `description`). Layout-Felder (`caption`) gehören dem Segmenter
-   und werden vom Extractor-Output überschrieben, falls er sie setzt.
+   `latex`, `description`). Layout-Felder (`caption`) gehören dem Segmenter.
+   Der Stage-Code legt die Segmenter-Caption auf den Extractor-Output.
 
 ## Empfohlen
 
 - Lazy Imports für schwere Dependencies (Torch, Transformers, MinerU):
   Import im `__init__` oder in einem `_load()`-Helper, nicht auf Modul-Ebene.
-  Die Pipeline registriert Adapter beim Import — schwere Importe dort
-  machen `python -m extraction` auf CPU-Hosts unnötig langsam/fragil.
+  Die CLI importiert `extraction.adapters` und registriert Adapter darüber —
+  schwere Importe auf Modul-Ebene machen schon `python -m extraction` auf
+  CPU-Hosts unnötig langsam/fragil.
 - Tests in `extraction/tests/test_<adapter>.py`. Integration-Tests, die
   GPU oder Modell-Downloads brauchen, mit `@pytest.mark.integration`
   markieren.

@@ -6,8 +6,9 @@ formulas, figures, diagrams, drawings. Output format is a stable contract
 
 ## Install
 
-GPU stack: CUDA build of PyTorch + MinerU 3.1+ (segmenter), olmOCR-2
-(text), Qwen2.5-VL (figures). Recommended: a local venv **outside**
+GPU stack: CUDA build of PyTorch + MinerU 3.1+ (segmenter plus default
+text/table/formula passthroughs), optional olmOCR-2 (text override),
+Qwen2.5-VL (figures). Recommended: a local venv **outside**
 the project directory — especially on network drives, where venvs
 are unreliable.
 
@@ -31,7 +32,8 @@ liefert nur CPU-Wheels.
     pip install -e ".[gpu,dev]"
 
 `[gpu]` zieht MinerU, transformers (mit `<5`-Cap, siehe Hinweis),
-torchvision, accelerate, beautifulsoup4. `[dev]` zieht pytest,
+torchvision, accelerate, beautifulsoup4 und MinerU-Transitiv-Deps, die
+von MinerU 3.1.x nicht sauber deklariert werden. `[dev]` zieht pytest,
 pytest-cov, ruff, mypy.
 
 ### 4. Verifizieren
@@ -74,7 +76,49 @@ Input: PDF-Pfade. Legt Output-Ordner automatisch unter `outputs/` an.
 
     python -m extraction segment <pdf1> <pdf2> ...
 
-### 2. Text extrahieren (olmOCR-2)
+### MinerU-Backend wechseln
+
+Der MinerU-Adapter ist unter drei Registry-Namen registriert, einer pro
+Backend:
+
+- `mineru25`: `pipeline`
+- `mineru_hybrid`: `hybrid-auto-engine`
+- `mineru_vlm`: `vlm-auto-engine`
+
+Welcher aktiv ist, steht in `extraction/config.py` bzw. der genutzten
+YAML-Config.
+
+Hybrid testen:
+
+    extraction:
+      segmenter: mineru_hybrid
+      text_extractor: mineru_hybrid
+      table_extractor: mineru_hybrid
+      formula_extractor: mineru_hybrid
+
+VLM testen:
+
+    extraction:
+      segmenter: mineru_vlm
+      text_extractor: mineru_vlm
+      table_extractor: mineru_vlm
+      formula_extractor: mineru_vlm
+
+Ein Backend-Wechsel ändert die gespeicherte `stage_config`. Bestehende
+Output-Ordner werden deshalb beim erneuten `segment` bewusst als stale
+markiert; nutze für Vergleiche einen frischen Output-Ordner. Für Hybrid/VLM
+kann je nach MinerU-Installation eine vollständige Installation wie
+`mineru[all]` nötig sein.
+
+### 2. Text, Tabellen und Formeln ergänzen
+
+Wenn `text_extractor`, `table_extractor` und `formula_extractor` auf
+denselben Adapter wie der Segmenter zeigen (z. B. alle auf einen der
+MinerU-Adapter), hat `segment` die Inhalte bereits als Sidecars
+geschrieben — `extract-text` überspringt sie dann. Setzt die Config einen
+abweichenden Extractor (z. B. `text_extractor: olmocr2` oder
+`table_extractor: qwen25vl_table`), läuft die jeweilige Extraktion hier
+über die gespeicherten Crops.
 
     python -m extraction extract-text <outdir1> <outdir2> ...
 
@@ -100,14 +144,19 @@ auch wenn die aktuelle Config inzwischen eine andere DPI enthält.
 
 ### Einzelnen Schritt neu laufen lassen
 
-Standardmäßig überspringt eine Stage bereits vorhandene Sidecars. Für eine
-bewusste Neu-Extraktion derselben Zielartefakte gibt es `--force`:
+Stage-Marker verhindern komplette Wiederholungen bereits erledigter Schritte.
+`extract-text` überspringt zusätzlich vorhandene Sidecars, damit
+MinerU-Passthrough-Inhalte aus `segment` erhalten bleiben. Für eine bewusste
+Neu-Extraktion derselben Zielartefakte gibt es `--force`:
 
     python -m extraction extract-text --force outputs/jmmp-09-00199-v2
     python -m extraction describe-figures --force outputs/jmmp-09-00199-v2
 
 `--force` überschreibt nur die Sidecars/Crops der jeweiligen Stage und
-entfernt `assemble.done`; danach `assemble` erneut ausführen.
+entfernt `assemble.done`; danach `assemble` erneut ausführen. Wenn die
+Config einen MinerU-Passthrough nutzt (Segmenter und Extractor mit
+demselben Registry-Namen), ist `extract-text --force` normalerweise
+nicht nötig, weil die Inhalte schon aus `segment` stammen.
 
 Tabellen und Formeln dürfen als Crop-only Fallback persistieren, wenn der
 Extractor keinen strukturierten Inhalt liefert. In diesem Fall bleibt

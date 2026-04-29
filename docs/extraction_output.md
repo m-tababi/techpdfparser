@@ -13,9 +13,14 @@ Spec voneinander abweichen: **der Code gewinnt**, die Spec wird aktualisiert.
 Beispiel für eine 3-seitige PDF mit Text, einer Tabelle und einer Abbildung:
 
 ```
-outputs/
-├── content_list.json                 ← gemergte, flache Elementliste
+outputs/<run>/
+├── content_list.json                 ← gemergte, flache Elementliste nach assemble
 ├── segmentation.json                 ← rohe Regionen vor Extraktion (Debug)
+├── .stages/
+│   ├── segment.done
+│   ├── extract-text.done
+│   ├── describe-figures.done
+│   └── assemble.done
 └── pages/
     ├── 0/
     │   ├── page.png                  ← gerenderte Seite (DPI aus Config, default 150)
@@ -40,7 +45,9 @@ Regeln:
   bekommen zusätzlich ein PNG-Crop mit demselben `<el_id>_<type>`-Stamm.
 - Nicht-visuelle Typen (`text`, `heading`) bekommen **nur** die JSON.
 - `pages/<N>/page.png` ist die komplette gerenderte Seite (nützlich zum visuellen
-  Vergleich und als Input für Segmenter/Extractor die das ganze Seitenbild brauchen).
+  Vergleich und als Basis für spätere Region-Crops).
+- `.stages/<stage>.done` und `.stages/<stage>.error` halten den Stand der
+  vier Stage-Kommandos fest.
 
 ## Quelle der Wahrheit
 
@@ -168,8 +175,10 @@ Vergleichszweck (zwei Segmenter gegeneinander laufen lassen, Layout-Treffer prü
 }
 ```
 
-Wenn der Segmenter bereits Content mitliefert (MinerU z. B. füllt Tabellen-Markdown
-direkt), steht dieser hier mit drin — genau so wie die Pipeline ihn übernimmt.
+Wenn der Segmenter bereits Content mitliefert (MinerU füllt z. B. Text,
+Tabellen-HTML/-Markdown, Formel-LaTeX und Captions), steht dieser hier mit drin.
+`segment` schreibt daraus direkt Element-Sidecars, wenn der konfigurierte
+Role-Extractor denselben `tool_name` wie der Segmenter hat.
 
 `render_dpi` ist die effektive DPI des gerenderten `page.png`. Nachgelagerte
 Stages verwenden diesen Wert beim Cropping, nicht die eventuell inzwischen
@@ -181,7 +190,7 @@ um stale Outputs mit existierendem `segment.done` sicher zu erkennen.
 
 Die Pipeline entscheidet pro Region **nicht selbst**, welches Tool den Content
 liefert. Die Config weist jedem Role (text, table, formula, figure) genau ein
-Tool zu. Die Pipeline gehorcht.
+Tool zu. Die Stages gehorchen.
 
 Datenquellen pro Feld:
 
@@ -195,14 +204,20 @@ Datenquellen pro Feld:
 | `latex`                                    | `formula_extractor`     |
 | `description`                              | `figure_descriptor`     |
 
-Ablauf pro Region:
+Ablauf pro Region im staged Workflow:
 
-1. Pipeline bestimmt das Role-Tool für den Region-Typ aus der Config.
-2. Wenn `role_tool.tool_name == segmenter.tool_name`: Pipeline übernimmt
-   `region.content` (Tool-Match-Optimierung — gleiches Tool, kein Re-Run nötig).
-   Sonst: Pipeline cropped das Seitenbild und ruft das Role-Tool.
-3. `caption` aus dem Segmenter bleibt in jedem Fall erhalten.
-4. Ein Role-Tool-Output mit leerem Pflichtfeld wird gedroppt, wenn keine
+1. `segment` rendert Seiten, schreibt `segmentation.json` und prüft pro Region,
+   ob das konfigurierte Role-Tool denselben Namen wie der Segmenter hat.
+2. Bei Tool-Match und vorhandenem `region.content` schreibt `segment` direkt
+   den Element-Sidecar. Für visuelle Typen wird zusätzlich ein Crop gespeichert.
+3. `extract-text` behandelt Text, Heading, Tabelle und Formel nur dort, wo noch
+   kein Sidecar existiert oder `--force` gesetzt ist. Dazu cropped die Stage das
+   gespeicherte `page.png` und ruft das konfigurierte Role-Tool auf.
+4. `describe-figures` behandelt Figure, Diagram und Technical Drawing analog
+   mit dem konfigurierten `figure_descriptor`.
+5. `caption` aus dem Segmenter bleibt erhalten und wird auf den Extractor-Output
+   gelegt.
+6. Ein Role-Tool-Output mit leerem Pflichtfeld wird gedroppt, wenn keine
    visuelle Evidenz existiert. Tabellen und Formeln dürfen als Crop-only
    Fallback persistieren, solange ein `image_path` vorhanden ist; Text und
    Headings ohne Text werden gedroppt.
@@ -216,9 +231,9 @@ Beispiele:
 | `segmenter: mineru25`, `figure_descriptor: noop` | Figure-Element hat `caption` aus dem Segmenter, aber keine `description`.               |
 
 Welche Tool-Kombination pro Role optimal ist, wird durch Benchmarks
-entschieden, nicht durch Pipeline-Heuristik. Der Default
-`table_extractor: mineru25` nutzt die Tool-Match-Optimierung — das ist
-Effizienz, kein Design-Constraint.
+entschieden, nicht durch Pipeline-Heuristik. Wenn Segmenter und Role-Tool
+denselben Registry-Namen haben, nutzt die Pipeline die
+Tool-Match-Optimierung — das ist Effizienz, kein Design-Constraint.
 
 ## Reading Order
 
@@ -234,7 +249,7 @@ Effizienz, kein Design-Constraint.
 ## Koordinatensystem
 
 `bbox` in jedem `Region` und jedem `Element` ist in **PDF-Points**, Origin
-oben-links, DPI-unabhängig. Beide mitgelieferten Segmenter (MinerU 2.5 via
+oben-links, DPI-unabhängig. Beide mitgelieferten Segmenter (MinerU via
 `middle_json`, PyMuPDF via `get_text("dict")`) liefern bereits in Points.
 
 Die Pipeline skaliert bbox nur beim Cropping auf das gerenderte Seitenbild:
@@ -271,7 +286,7 @@ Diese Felder und Artefakte sind bewusst aus Phase 1 ausgenommen und folgen spät
 Der ganze Phase-2-Teil ist nachgelagert **berechenbar** aus dem Phase-1-Output — es
 braucht kein erneutes PDF-Parsing.
 
-Sobald `document_rich.json` in Phase 2 produziert wird, wird der
-Output-Isolation-Fail-Safe in `Pipeline.run()` es als geprüftes Artefakt
-aufnehmen — mit genau derselben Semantik wie `content_list.json` und
-`segmentation.json`.
+Sobald `document_rich.json` in Phase 2 produziert wird, muss die Stage-Sicherheit
+um dieses Artefakt erweitert werden. Aktuell produziert die Pipeline
+`content_list.json`, `segmentation.json`, Page-Bilder, Sidecars, Crops und
+Stage-Marker.
