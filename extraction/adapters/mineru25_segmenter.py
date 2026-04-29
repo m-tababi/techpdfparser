@@ -1,4 +1,4 @@
-"""MinerU 2.5 rich segmenter.
+"""MinerU rich segmenters.
 
 Wraps ``mineru.cli.common.do_parse`` and converts the produced
 ``*_middle.json`` into the new ``Region`` schema. Unlike the CPU
@@ -7,7 +7,14 @@ markdown, formula LaTeX, heading text) in each Region — the pipeline's
 merge rule will then keep that content instead of calling the dedicated
 extractor over the crop.
 
-Requires ``pip install mineru`` plus the supporting model weights.
+Registered adapter names:
+
+* ``mineru25`` uses MinerU's stable ``pipeline`` backend.
+* ``mineru_hybrid`` uses ``hybrid-auto-engine``.
+* ``mineru_vlm`` uses ``vlm-auto-engine``.
+
+Requires ``pip install mineru`` plus the supporting model weights. The project
+currently depends on ``mineru>=3.1``.
 """
 from __future__ import annotations
 
@@ -30,7 +37,11 @@ _BLOCK_TITLE = "title"
 _BLOCK_TABLE = "table"
 _BLOCK_CHART = "chart"
 _BLOCK_IMAGE = "image"
+_BLOCK_EQUATION = "equation"
 _BLOCK_INTERLINE_EQUATION = "interline_equation"
+_BLOCK_LIST = "list"
+_BLOCK_CODE = "code"
+_BLOCK_ALGORITHM = "algorithm"
 
 _BLOCK_IMAGE_BODY = "image_body"
 _BLOCK_TABLE_BODY = "table_body"
@@ -44,12 +55,13 @@ _SPAN_INLINE_EQUATION = "inline_equation"
 _SPAN_IMAGE = "image"
 _SPAN_TABLE = "table"
 _SPAN_CHART = "chart"
+_SPAN_EQUATION = "equation"
 _SPAN_INTERLINE_EQUATION = "interline_equation"
 
 
-@register_segmenter("mineru25")
-class MinerU25Segmenter:
-    TOOL_NAME = "mineru25"
+class _BaseMinerUSegmenter:
+    TOOL_NAME = "mineru"
+    BACKEND = "pipeline"
 
     def __init__(self, device: str = "cuda") -> None:
         self._device = device
@@ -82,7 +94,7 @@ class MinerU25Segmenter:
                 pdf_file_names=[pdf_path.name],
                 pdf_bytes_list=[pdf_bytes],
                 p_lang_list=[""],
-                backend="pipeline",
+                backend=self.BACKEND,
                 parse_method="auto",
                 formula_enable=True,
                 table_enable=True,
@@ -107,8 +119,42 @@ class MinerU25Segmenter:
         return regions
 
 
+@register_segmenter("mineru25")
+class MinerU25Segmenter(_BaseMinerUSegmenter):
+    TOOL_NAME = "mineru25"
+    BACKEND = "pipeline"
+
+
+@register_segmenter("mineru_hybrid")
+class MinerUHybridSegmenter(_BaseMinerUSegmenter):
+    TOOL_NAME = "mineru_hybrid"
+    BACKEND = "hybrid-auto-engine"
+
+
+@register_segmenter("mineru_vlm")
+class MinerUVLMSegmenter(_BaseMinerUSegmenter):
+    TOOL_NAME = "mineru_vlm"
+    BACKEND = "vlm-auto-engine"
+
+
+class _MinerUPassthroughExtractor:
+    TOOL_NAME = "mineru"
+
+    def __init__(self, **_kwargs: Any) -> None:
+        # Shares the adapter config block with the segmenter; passthrough
+        # extractors have nothing to configure, so swallow any kwargs.
+        pass
+
+    @property
+    def tool_name(self) -> str:
+        return self.TOOL_NAME
+
+    def extract(self, _image: Any, _page_number: int) -> ElementContent:
+        return ElementContent()
+
+
 @register_table_extractor("mineru25")
-class MinerU25TableExtractor:
+class MinerU25TableExtractor(_MinerUPassthroughExtractor):
     """Passthrough role so the config can name mineru25 as the table extractor.
 
     The MinerU segmenter already populates table markdown in each Region, so
@@ -119,21 +165,9 @@ class MinerU25TableExtractor:
 
     TOOL_NAME = "mineru25"
 
-    def __init__(self, **_kwargs: Any) -> None:
-        # Shares the adapters.mineru25 config block with the segmenter;
-        # this passthrough has nothing to configure, so swallow any kwargs.
-        pass
-
-    @property
-    def tool_name(self) -> str:
-        return self.TOOL_NAME
-
-    def extract(self, region_image: Any, page_number: int) -> ElementContent:
-        return ElementContent()
-
 
 @register_text_extractor("mineru25")
-class MinerU25TextExtractor:
+class MinerU25TextExtractor(_MinerUPassthroughExtractor):
     """Passthrough role for text/heading regions.
 
     MinerU's middle_json carries per-region text already, so the pipeline's
@@ -142,19 +176,9 @@ class MinerU25TextExtractor:
 
     TOOL_NAME = "mineru25"
 
-    def __init__(self, **_kwargs: Any) -> None:
-        pass
-
-    @property
-    def tool_name(self) -> str:
-        return self.TOOL_NAME
-
-    def extract(self, page_image: Any, page_number: int) -> ElementContent:
-        return ElementContent()
-
 
 @register_formula_extractor("mineru25")
-class MinerU25FormulaExtractor:
+class MinerU25FormulaExtractor(_MinerUPassthroughExtractor):
     """Passthrough role for interline-equation regions.
 
     MinerU yields LaTeX for each interline_equation block; the pipeline's
@@ -163,15 +187,35 @@ class MinerU25FormulaExtractor:
 
     TOOL_NAME = "mineru25"
 
-    def __init__(self, **_kwargs: Any) -> None:
-        pass
 
-    @property
-    def tool_name(self) -> str:
-        return self.TOOL_NAME
+@register_table_extractor("mineru_hybrid")
+class MinerUHybridTableExtractor(_MinerUPassthroughExtractor):
+    TOOL_NAME = "mineru_hybrid"
 
-    def extract(self, region_image: Any, page_number: int) -> ElementContent:
-        return ElementContent()
+
+@register_text_extractor("mineru_hybrid")
+class MinerUHybridTextExtractor(_MinerUPassthroughExtractor):
+    TOOL_NAME = "mineru_hybrid"
+
+
+@register_formula_extractor("mineru_hybrid")
+class MinerUHybridFormulaExtractor(_MinerUPassthroughExtractor):
+    TOOL_NAME = "mineru_hybrid"
+
+
+@register_table_extractor("mineru_vlm")
+class MinerUVLMTableExtractor(_MinerUPassthroughExtractor):
+    TOOL_NAME = "mineru_vlm"
+
+
+@register_text_extractor("mineru_vlm")
+class MinerUVLMTextExtractor(_MinerUPassthroughExtractor):
+    TOOL_NAME = "mineru_vlm"
+
+
+@register_formula_extractor("mineru_vlm")
+class MinerUVLMFormulaExtractor(_MinerUPassthroughExtractor):
+    TOOL_NAME = "mineru_vlm"
 
 
 _IOU_MATCH_THRESHOLD = 0.5
@@ -196,7 +240,7 @@ def _bbox_iou(a: list[float], b: list[float]) -> float:
 def _confidence_for_block(
     block: dict[str, Any], layout_dets: list[dict[str, Any]]
 ) -> float:
-    # MinerU 2.5 writes the detection score directly onto each para_block.
+    # MinerU writes the detection score directly onto each para_block.
     # Prefer that. layout_dets is populated only by older backends; when it
     # is, match by IoU and return the best-overlapping detection's score.
     direct_score = block.get("score")
@@ -232,8 +276,8 @@ def _block_to_region(
 
     confidence = _confidence_for_block(block, layout_dets)
 
-    if block_type == _BLOCK_TEXT:
-        text = _lines_to_text(block.get("lines", []))
+    if block_type in {_BLOCK_TEXT, _BLOCK_LIST, _BLOCK_CODE, _BLOCK_ALGORITHM}:
+        text = _block_to_text(block)
         if not text:
             return None
         return Region(
@@ -245,7 +289,7 @@ def _block_to_region(
         )
 
     if block_type == _BLOCK_TITLE:
-        text = _lines_to_text(block.get("lines", []))
+        text = _block_to_text(block)
         if not text:
             return None
         return Region(
@@ -257,13 +301,27 @@ def _block_to_region(
         )
 
     if block_type == _BLOCK_TABLE:
-        _, html = _extract_body_data(block)
-        html = html.strip()
+        _, body = _extract_body_data(block)
+        body = body.strip()
+        direct_html = _first_text_field(block, ("html",))
+        direct_content = _first_text_field(block, ("content", "markdown", "text"))
+        html = direct_html
+        markdown = ""
+        if body:
+            if _looks_like_html(body):
+                html = html or body
+            else:
+                markdown = body
+        if direct_content:
+            if _looks_like_html(direct_content):
+                html = html or direct_content
+            else:
+                markdown = markdown or direct_content
         rows = _html_to_rows(html)
-        caption = _collect_block_text(block, _BLOCK_TABLE_CAPTION)
+        caption = _caption_text(block, _BLOCK_TABLE_CAPTION, ("caption", "table_caption"))
         # markdown is a lossy flattening (rowspan/colspan ignored); html keeps
         # the hierarchical structure so downstream consumers can choose.
-        markdown = _rows_to_markdown(rows) if rows else html
+        markdown = markdown or (_rows_to_markdown(rows) if rows else html)
         if not markdown and not caption and not html:
             return None
         content = ElementContent(
@@ -280,9 +338,13 @@ def _block_to_region(
             content=content,
         )
 
-    if block_type == _BLOCK_INTERLINE_EQUATION:
+    if block_type in {_BLOCK_EQUATION, _BLOCK_INTERLINE_EQUATION}:
         _, latex = _extract_body_data(block)
-        latex = latex.strip()
+        latex = (
+            latex
+            or _first_text_field(block, ("latex", "content", "text"))
+            or _block_to_text(block)
+        ).strip()
         if not latex:
             return None
         return Region(
@@ -297,7 +359,12 @@ def _block_to_region(
         caption_type = (
             _BLOCK_CHART_CAPTION if block_type == _BLOCK_CHART else _BLOCK_IMAGE_CAPTION
         )
-        figure_caption = _collect_block_text(block, caption_type) or None
+        direct_caption_keys = (
+            ("caption", "chart_caption")
+            if block_type == _BLOCK_CHART
+            else ("caption", "image_caption")
+        )
+        figure_caption = _caption_text(block, caption_type, direct_caption_keys) or None
         # image_path is set by the pipeline after cropping the page image;
         # MinerU's internal PNG under parse_dir/images is not carried over.
         region_kind = (
@@ -326,7 +393,7 @@ def _iter_para_blocks(
     for page_idx, page in enumerate(raw.get("pdf_info", [])):
         page_number = int(page.get("page_idx", page_idx))
         layout_dets = page.get("layout_dets") or []
-        for block in page.get("para_blocks") or []:
+        for block in page.get("para_blocks") or page.get("blocks") or []:
             yield page_number, block, layout_dets
 
 
@@ -341,7 +408,7 @@ def _extract_body_data(para_block: dict[str, Any]) -> tuple[str, str]:
                     return str(span.get("image_path", "")), str(span.get("content", ""))
                 if span_type == _SPAN_IMAGE:
                     return str(span.get("image_path", "")), ""
-                if span_type == _SPAN_INTERLINE_EQUATION:
+                if span_type in {_SPAN_EQUATION, _SPAN_INTERLINE_EQUATION}:
                     return str(span.get("image_path", "")), str(span.get("content", ""))
         return "", ""
 
@@ -366,13 +433,65 @@ def _collect_block_text(para_block: dict[str, Any], block_type: str) -> str:
     return "\n".join(parts).strip()
 
 
+def _caption_text(
+    para_block: dict[str, Any],
+    nested_type: str,
+    direct_keys: tuple[str, ...],
+) -> str:
+    return _collect_block_text(para_block, nested_type) or _first_text_field(
+        para_block, direct_keys
+    )
+
+
+def _block_to_text(block: dict[str, Any]) -> str:
+    direct = _first_text_field(block, ("content", "text", "code_body"))
+    if direct:
+        return direct
+    line_text = _lines_to_text(block.get("lines", []))
+    if line_text:
+        return line_text
+    parts = [_block_to_text(child) for child in block.get("blocks", [])]
+    return "\n".join(part for part in parts if part).strip()
+
+
+def _first_text_field(block: dict[str, Any], keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = _value_to_text(block.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _value_to_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float)):
+        return str(value).strip()
+    if isinstance(value, list):
+        parts = [_value_to_text(item) for item in value]
+        return "\n".join(part for part in parts if part).strip()
+    if isinstance(value, dict):
+        return _first_text_field(value, ("content", "text", "code_body"))
+    return ""
+
+
 def _lines_to_text(lines: list[dict[str, Any]]) -> str:
     chunks: list[str] = []
     for line in lines:
         spans: list[str] = []
         for span in line.get("spans", []):
             span_type = span.get("type")
-            if span_type not in {_SPAN_TEXT, _SPAN_INLINE_EQUATION}:
+            if (
+                span_type is not None
+                and span_type not in {
+                    _SPAN_TEXT,
+                    _SPAN_INLINE_EQUATION,
+                    _SPAN_EQUATION,
+                    _SPAN_INTERLINE_EQUATION,
+                }
+            ):
                 continue
             content = str(span.get("content", "")).strip()
             if content:
@@ -380,6 +499,10 @@ def _lines_to_text(lines: list[dict[str, Any]]) -> str:
         if spans:
             chunks.append(" ".join(spans))
     return "\n".join(chunks).strip()
+
+
+def _looks_like_html(text: str) -> bool:
+    return text.lstrip().startswith("<")
 
 
 def _html_to_rows(html: str) -> list[list[str]]:
