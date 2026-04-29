@@ -97,3 +97,21 @@ mypy
 - **Segmenter confidence:** ML adapters propagate the model's per-region
   score into `Region.confidence`. Rule-based segmenters may use `1.0` but
   must comment why.
+
+## Git Workflow
+
+Niemals direkt auf `master`. Pro Aufgabe:
+
+1. `git switch master && git pull --ff-only`
+2. `git switch -c feature/<beschreibung>` (oder `fix/`, `chore/`, `docs/`)
+3. Atomare Commits im Conventional-Commits-Style (`feat(scope): ...`)
+4. `git push -u origin <branch>` und
+   `gh pr create --base master --title "..." --body "..."`
+   → triggert den Claude-Review-Agent (1–3 Min warten)
+5. Review lesen: `gh pr view <NR> --comments`
+6. Findings via Terminal-Claude `/review-pr <NR>` abarbeiten, pushen,
+   manuell „Run now" auf Routinen-Seite für Re-Review
+7. Bei grünem Review: `gh pr merge <NR> --squash --delete-branch`
+
+Trigger ist `gh pr create` — PRs aus Web-UI oder anderen Accounts werden
+nicht zwangsläufig gereviewt.
