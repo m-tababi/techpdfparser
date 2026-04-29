@@ -7,11 +7,30 @@ name = "techpdfparser"
 version = "0.1.0"
 description = "A technical PDF parsing library"
 requires-python = ">=3.10"
+# GPU-only. torch + torchvision müssen VOR `pip install -e .` separat vom
+# PyTorch-CUDA-Index installiert werden (siehe README), sonst zieht pip
+# die CPU-Wheels von PyPI. tatr/docling_table brauchen zusätzlich das
+# System-Binary `tesseract-ocr` (apt install — siehe README).
 dependencies = [
     "pydantic>=2.13",
     "pyyaml>=6.0",
     "pillow>=12.0",
     "pymupdf>=1.27",
+    "torch>=2.11",
+    "torchvision>=0.26",
+    "transformers>=4.45,<5",
+    "accelerate>=1.13",
+    "beautifulsoup4>=4.14",
+    "mineru>=3.1",
+    # Undeklarierte Transitiv-Deps von mineru 3.1.4 (per Import-Scan verifiziert):
+    "shapely>=2.1",         # mineru.model.ocr.seal_crop
+    "pyclipper>=1.4",       # mineru.model.utils.pytorchocr.postprocess.db_postprocess
+    "omegaconf>=2.3",       # mineru.model.utils.tools.infer.pytorchocr_utility
+    "albumentations>=2.0",  # mineru.model.mfr.unimernet (Formel-Pfad)
+    "ftfy>=6.3",            # mineru.model.mfr.pp_formulanet_plus_m (Formel-Pfad)
+    "docling-ibm-models>=3.0",
+    "huggingface-hub>=0.26",
+    "pytesseract>=0.3.10",
 ]
 
 [project.optional-dependencies]
@@ -20,28 +39,6 @@ dev = [
     "pytest-cov>=7.1",
     "ruff>=0.15",
     "mypy>=1.20",
-]
-gpu = [
-    "mineru>=3.1",
-    # Undeklarierte Transitiv-Deps von mineru 3.1.4 (per Import-Scan verifiziert):
-    "shapely>=2.1",         # mineru.model.ocr.seal_crop
-    "pyclipper>=1.4",       # mineru.model.utils.pytorchocr.postprocess.db_postprocess
-    "omegaconf>=2.3",       # mineru.model.utils.tools.infer.pytorchocr_utility
-    "albumentations>=2.0",  # mineru.model.mfr.unimernet (Formel-Pfad)
-    "ftfy>=6.3",            # mineru.model.mfr.pp_formulanet_plus_m (Formel-Pfad)
-    "transformers>=4.45,<5",
-    "torch>=2.11",
-    "torchvision>=0.26",
-    "accelerate>=1.13",
-    "beautifulsoup4>=4.14",
-]
-tables = [
-    # Optional alternative table extractors (docling_table, tatr, qwen25vl_table).
-    # The Qwen variant reuses transformers from [gpu]; tatr+docling_table need
-    # tesseract for cell-level OCR (system binary: `apt install tesseract-ocr`).
-    "docling-ibm-models>=3.0",
-    "huggingface-hub>=0.26",
-    "pytesseract>=0.3.10",
 ]
 
 [tool.setuptools.packages.find]

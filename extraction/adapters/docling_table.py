@@ -116,15 +116,21 @@ class DoclingTableExtractor:
 
 
 def _build_predictor_config(weights_dir: str, variant: str) -> dict[str, Any]:
-    """TFPredictor expects a nested dict; this is the minimum viable shape."""
+    """Load tm_config.json shipped with the snapshot, point save_dir at it.
+
+    The TFPredictor requires many keys (dataset_wordmap, predict.padding,
+    predict.pdf_cell_iou_thres, ...) that the snapshot's tm_config.json
+    already provides. Hand-crafting the dict drifts whenever upstream adds
+    a new required key; reusing the shipped config is the robust path.
+    """
+    import json
     import os
 
     save_dir = os.path.join(weights_dir, "model_artifacts", "tableformer", variant)
-    return {
-        "model": {"save_dir": save_dir, "type": "TableModel04_rs"},
-        "dataset": {"image_normalization": {"state": True}},
-        "predict": {"max_steps": 1024, "beam_size": 5, "bbox": True, "profiling": False},
-    }
+    with open(os.path.join(save_dir, "tm_config.json")) as f:
+        config: dict[str, Any] = json.load(f)
+    config["model"]["save_dir"] = save_dir
+    return config
 
 
 def _ocr_tokens(image: Image, pytesseract: Any, langs: str) -> list[dict[str, Any]]:

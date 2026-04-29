@@ -6,11 +6,13 @@ formulas, figures, diagrams, drawings. Output format is a stable contract
 
 ## Install
 
-GPU stack: CUDA build of PyTorch + MinerU 3.1+ (segmenter plus default
-text/table/formula passthroughs), optional olmOCR-2 (text override),
-Qwen2.5-VL (figures). Recommended: a local venv **outside**
-the project directory — especially on network drives, where venvs
-are unreliable.
+GPU-only. Voraussetzung: NVIDIA-GPU mit aktuellem CUDA-Treiber.
+Empfohlen: ein lokales venv **außerhalb** des Projekt-Ordners —
+besonders auf Netzlaufwerken, wo venvs unzuverlässig sind.
+
+**Reihenfolge ist wichtig:** PyTorch (Schritt 2) muss **vor** dem
+Projekt-Install (Schritt 3) kommen. Sonst zieht pip die CPU-Wheels
+von PyPI und du hast ohne es zu merken kein CUDA.
 
 ### 1. Venv anlegen und aktivieren
 
@@ -18,25 +20,32 @@ are unreliable.
     source ~/venvs/phase1/bin/activate
     pip install --upgrade pip
 
-### 2. PyTorch vom CUDA-13-Wheel-Index installieren
-
-`torch` und `torchvision` müssen vom PyTorch-Index kommen — PyPI
-liefert nur CPU-Wheels.
+### 2. PyTorch vom CUDA-Wheel-Index installieren
 
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 
-(Andere CUDA-/CPU-Builds: https://pytorch.org/get-started/locally/)
+(Andere CUDA-Builds: https://pytorch.org/get-started/locally/)
 
-### 3. Projekt + Extras installieren
+### 3. Projekt installieren — ein Befehl, alles drin
 
-    pip install -e ".[gpu,dev]"
+    pip install -e ".[dev]"
 
-`[gpu]` zieht MinerU, transformers (mit `<5`-Cap, siehe Hinweis),
-torchvision, accelerate, beautifulsoup4 und MinerU-Transitiv-Deps, die
-von MinerU 3.1.x nicht sauber deklariert werden. `[dev]` zieht pytest,
-pytest-cov, ruff, mypy.
+Bringt alles in einem Schritt: MinerU, transformers (mit `<5`-Cap,
+siehe Hinweis), accelerate, beautifulsoup4, MinerU-Transitiv-Deps,
+**alle Tabellen-Extraktoren** (TATR, docling, qwen25vl_table) plus
+die Dev-Tools (pytest, ruff, mypy). Lass `[dev]` weg, wenn du nur
+die Pipeline laufen lassen willst — dann reicht `pip install -e .`.
 
-### 4. Verifizieren
+### 4. Tesseract-System-Binary (nur für TATR und docling_table)
+
+    sudo apt install tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
+
+Nur nötig, wenn du `configs/tatr_table.yaml` oder
+`configs/docling_table.yaml` benutzt — beide rufen Tesseract für die
+Zell-OCR auf. Standard-Lauf und `configs/qwen25vl_table.yaml` brauchen
+das nicht (Qwen2.5-VL macht Struktur + OCR in einem Schritt).
+
+### 5. Verifizieren
 
     pip list | grep -iE "torch|mineru|transformers|accelerate|techpdfparser"
 
@@ -49,19 +58,12 @@ Erwartet:
     torchvision    0.26.x+cu130
     transformers   4.5x.y                   # 4.x wegen <5-Cap
 
-### CPU-only Fallback
-
-    pip install -e .
-
-Nur der `pymupdf_text`-Segmenter und die `noop`-Adapter funktionieren —
-kein MinerU, keine VLM-Extraktion.
-
 ### Hinweis: `transformers<5` Cap
 
 Der olmOCR-2-Adapter (`extraction/adapters/olmocr2_text.py`) importiert
 `AutoModelForVision2Seq`, das in transformers 5.0 entfernt wurde
-(Ersatz: `AutoModelForImageTextToText`). `[gpu]` pinnt deshalb
-`transformers<5`, bis der Adapter migriert ist.
+(Ersatz: `AutoModelForImageTextToText`). Wir pinnen deshalb
+`transformers<5` in den Dependencies, bis der Adapter migriert ist.
 
 ## Extraction-Pipeline
 
