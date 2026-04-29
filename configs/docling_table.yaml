@@ -3,8 +3,8 @@
 # bleiben bei MinerU bzw. Qwen2.5-VL.
 #
 # Voraussetzungen:
-#   pip install -e ".[gpu,tables]"
-#   apt install tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
+#   pip install -e .
+#   sudo apt install tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
 #
 # Lauf:
 #   python -m extraction segment <pdf> --config configs/docling_table.yaml

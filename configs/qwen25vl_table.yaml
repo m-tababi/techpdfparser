@@ -3,7 +3,7 @@
 # Modell ist im GPU-Stack bereits vorhanden (gleiches wie qwen25vl_figure).
 #
 # Voraussetzungen:
-#   pip install -e ".[gpu]"
+#   pip install -e .
 #
 # Lauf:
 #   python -m extraction segment <pdf> --config configs/qwen25vl_table.yaml

@@ -53,7 +53,7 @@ Projekt-Kontext: `CLAUDE.md` (Architecture Invariants, Conventions),
   nicht aus aktueller `cfg.dpi`
 - Heavy deps lazy-geladen im Adapter-`_load()`, nicht auf Modul-Ebene
 - `pyproject.toml`: `mypy`-Scope weiter `extraction/` only; neue
-  Heavy deps in `[gpu]` oder `[tables]` Extras
+  Heavy deps direkt in `dependencies` (einziges Extra ist `[dev]`)
 - PRINCIPLES.md-Compliance: Scope Discipline, Root Causes,
   Verification Before Done
 
