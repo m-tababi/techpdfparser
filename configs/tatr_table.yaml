@@ -1,0 +1,30 @@
+# Tabellen-Extraktion über Microsoft Table Transformer v1.1
+# (microsoft/table-transformer-structure-recognition-v1.1-all)
+# + Tesseract für die Zell-Texte. Alle anderen Rollen bleiben unverändert.
+#
+# Voraussetzungen:
+#   pip install -e ".[gpu,tables]"
+#   apt install tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
+#
+# Lauf:
+#   python -m extraction segment <pdf> --config configs/tatr_table.yaml
+#   python -m extraction extract-text --force <outdir> --config configs/tatr_table.yaml
+#   python -m extraction describe-figures <outdir> --config configs/tatr_table.yaml
+#   python -m extraction assemble <outdir> --config configs/tatr_table.yaml
+
+extraction:
+  renderer: pymupdf
+  segmenter: mineru_vlm
+  text_extractor: mineru_vlm
+  table_extractor: tatr
+  formula_extractor: mineru_vlm
+  figure_descriptor: qwen25vl
+  output_dir: outputs_tatr
+  dpi: 150
+  confidence_threshold: 0.3
+
+adapters:
+  tatr:
+    device: cuda
+    score_threshold: 0.5
+    ocr_langs: deu+eng

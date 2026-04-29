@@ -1,0 +1,28 @@
+# Tabellen-Extraktion über Qwen2.5-VL-7B (Vision-Language-Modell)
+# Struktur + OCR in einem Schritt; keine zusätzliche OCR-Komponente nötig.
+# Modell ist im GPU-Stack bereits vorhanden (gleiches wie qwen25vl_figure).
+#
+# Voraussetzungen:
+#   pip install -e ".[gpu]"
+#
+# Lauf:
+#   python -m extraction segment <pdf> --config configs/qwen25vl_table.yaml
+#   python -m extraction extract-text --force <outdir> --config configs/qwen25vl_table.yaml
+#   python -m extraction describe-figures <outdir> --config configs/qwen25vl_table.yaml
+#   python -m extraction assemble <outdir> --config configs/qwen25vl_table.yaml
+
+extraction:
+  renderer: pymupdf
+  segmenter: mineru_vlm
+  text_extractor: mineru_vlm
+  table_extractor: qwen25vl_table
+  formula_extractor: mineru_vlm
+  figure_descriptor: qwen25vl
+  output_dir: outputs_qwen25vl_table
+  dpi: 150
+  confidence_threshold: 0.3
+
+adapters:
+  qwen25vl_table:
+    device: cuda
+    max_new_tokens: 2048

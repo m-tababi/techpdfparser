@@ -1,0 +1,30 @@
+# Tabellen-Extraktion über IBMs TableFormer (Standalone-Strukturmodell)
+# + Tesseract für die Zell-Texte. Segmentierung + Text + Formeln + Figures
+# bleiben bei MinerU bzw. Qwen2.5-VL.
+#
+# Voraussetzungen:
+#   pip install -e ".[gpu,tables]"
+#   apt install tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng
+#
+# Lauf:
+#   python -m extraction segment <pdf> --config configs/docling_table.yaml
+#   python -m extraction extract-text --force <outdir> --config configs/docling_table.yaml
+#   python -m extraction describe-figures <outdir> --config configs/docling_table.yaml
+#   python -m extraction assemble <outdir> --config configs/docling_table.yaml
+
+extraction:
+  renderer: pymupdf
+  segmenter: mineru_vlm
+  text_extractor: mineru_vlm
+  table_extractor: docling_table
+  formula_extractor: mineru_vlm
+  figure_descriptor: qwen25vl
+  output_dir: outputs_docling_table
+  dpi: 150
+  confidence_threshold: 0.3
+
+adapters:
+  docling_table:
+    variant: fast       # alternative: "accurate" (langsamer, etwas besser)
+    device: cuda
+    ocr_langs: deu+eng
