@@ -17,15 +17,15 @@ class ExtractionConfig(BaseModel):
     """Configuration for the extraction pipeline."""
 
     renderer: str = "pymupdf"
-    segmenter: str = "mineru25"
+    segmenter: str = "mineru_vlm"
     # MinerU's middle_json already carries per-region text and LaTeX; the
     # passthrough extractors let the pipeline keep that content via role-match
     # instead of re-running an OCR/formula model. olmocr2 stays available as
     # an alternative for image-only PDFs.
-    text_extractor: str = "mineru25"
-    table_extractor: str = "mineru25"
-    formula_extractor: str = "mineru25"
-    figure_descriptor: str = "qwen25vl"
+    text_extractor: str = "mineru_vlm"
+    table_extractor: str = "qwen25vl_table"
+    formula_extractor: str = "mineru_vlm"
+    figure_descriptor: str = "tatr"
     output_dir: str = "outputs"
     confidence_threshold: float = 0.3
     dpi: int = 150
