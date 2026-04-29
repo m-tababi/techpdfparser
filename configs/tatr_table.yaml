@@ -28,3 +28,5 @@ adapters:
     device: cuda
     score_threshold: 0.5
     ocr_langs: deu+eng
+
+das ist ein test ob review funktioniert 
