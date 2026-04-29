@@ -11,6 +11,7 @@
 #   python -m extraction extract-text --force <outdir> --config configs/tatr_table.yaml
 #   python -m extraction describe-figures <outdir> --config configs/tatr_table.yaml
 #   python -m extraction assemble <outdir> --config configs/tatr_table.yaml
+# Weitere Informationen zu den einzelnen Schritten siehe:
 
 extraction:
   renderer: pymupdf
