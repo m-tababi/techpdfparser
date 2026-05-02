@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-05-02 — Propagiere Segmenter-Layout-Felder durch Nicht-Passthrough-Extraktoren
+
+**Priority:** Important
+
+### Kontext
+`extraction/stages/extract_text.py` (~Z. 141) kopiert beim Wechsel auf
+einen Extractor mit anderem `tool_name` als der Segmenter heute nur
+`caption` von `region.content` auf den Extractor-Output. Andere
+Layout-Felder vom Segmenter — aktuell `caption_position` (Tabellen),
+perspektivisch alle weiteren Felder, die nur der Segmenter berechnen
+kann — fallen lautlos weg. Caption_position wurde erst durch den Bench
+(`pubtables_1m_caption_above|below`) sichtbar; dort funktioniert es
+nur, weil `segmenter == table_extractor` (Passthrough) gilt.
+
+### Tasks
+- [ ] In `extract_text.py` alle nicht-Extractor-Felder aus
+      `region.content` (`caption`, `caption_position`, …) generisch
+      auf das Extractor-Output mergen, statt jedes Feld einzeln per
+      Hand zu kopieren.
+- [ ] Test: Tabelle mit Nicht-MinerU-`table_extractor` (z. B.
+      `qwen25vl_table`) behält `caption_position` aus dem Segmenter.
+- [ ] `docs/extraction_output.md` Schritt 5 aktualisieren, sobald die
+      Lücke geschlossen ist.
+
+### Acceptance Criteria
+- [ ] Tabellen-Sidecars enthalten `caption_position` unabhängig
+      davon, ob der `table_extractor` MinerU oder ein anderer Adapter ist.
+- [ ] Bench-Cases `caption_above` / `caption_below` bleiben grün
+      auch unter Configs mit fremdem `table_extractor`.
+
+---
+
 ## 2026-04-19 — Audit Segmentation Output Against Input PDFs
 
 **Priority:** Urgent

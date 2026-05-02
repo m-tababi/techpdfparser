@@ -104,6 +104,102 @@ def test_confidence_for_block_picks_best_iou_not_highest_score() -> None:
     assert _confidence_for_block(block, layout_dets) == 0.60
 
 
+def _table_block_with_caption(
+    table_bbox: list[float],
+    caption_bboxes: list[list[float]],
+    caption_text: str = "Table 1.",
+) -> dict[str, Any]:
+    body_block = {
+        "type": "table_body",
+        "bbox": list(table_bbox),
+        "lines": [
+            {"spans": [{"type": "table", "html": "<table><tr><td>x</td></tr></table>"}]}
+        ],
+    }
+    caption_blocks = [
+        {
+            "type": "table_caption",
+            "bbox": list(cap_bbox),
+            "lines": [{"spans": [{"type": "text", "content": caption_text}]}],
+        }
+        for cap_bbox in caption_bboxes
+    ]
+    return {
+        "bbox": list(table_bbox),
+        "type": "table",
+        "score": 0.9,
+        "blocks": [body_block, *caption_blocks],
+    }
+
+
+def test_table_caption_above_sets_caption_position_above() -> None:
+    block = _table_block_with_caption(
+        table_bbox=[50.0, 200.0, 300.0, 400.0],
+        caption_bboxes=[[50.0, 100.0, 300.0, 180.0]],
+    )
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.caption_position == "above"
+
+
+def test_table_caption_below_sets_caption_position_below() -> None:
+    block = _table_block_with_caption(
+        table_bbox=[50.0, 200.0, 300.0, 400.0],
+        caption_bboxes=[[50.0, 410.0, 300.0, 440.0]],
+    )
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.caption_position == "below"
+
+
+def test_table_caption_overlapping_sets_caption_position_none() -> None:
+    block = _table_block_with_caption(
+        table_bbox=[50.0, 200.0, 300.0, 400.0],
+        caption_bboxes=[[50.0, 380.0, 300.0, 420.0]],
+    )
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.caption_position is None
+
+
+def test_table_without_caption_block_keeps_caption_position_none() -> None:
+    block = {
+        "bbox": [0.0, 0.0, 100.0, 100.0],
+        "type": "table",
+        "score": 0.95,
+        "blocks": [
+            {
+                "type": "table_body",
+                "bbox": [0.0, 0.0, 100.0, 100.0],
+                "lines": [
+                    {"spans": [{"type": "table", "html": "<table><tr><td>x</td></tr></table>"}]}
+                ],
+            }
+        ],
+    }
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.caption_position is None
+
+
+def test_table_with_multiple_captions_all_above_sets_caption_position_above() -> None:
+    block = _table_block_with_caption(
+        table_bbox=[50.0, 200.0, 300.0, 400.0],
+        caption_bboxes=[
+            [50.0, 100.0, 300.0, 130.0],
+            [50.0, 140.0, 300.0, 180.0],
+        ],
+    )
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.caption_position == "above"
+
+
 def test_table_block_keeps_raw_html_with_rowspan_colspan() -> None:
     # Hierarchical header: 'Group' spans two sub-columns; markdown flattens
     # this, html must preserve it.

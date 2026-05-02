@@ -22,7 +22,7 @@ import json
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from ..models import ElementContent, ElementType, Region
 from ..registry import (
@@ -319,6 +319,8 @@ def _block_to_region(
                 markdown = markdown or direct_content
         rows = _html_to_rows(html)
         caption = _caption_text(block, _BLOCK_TABLE_CAPTION, ("caption", "table_caption"))
+        caption_bbox = _caption_bbox(block, _BLOCK_TABLE_CAPTION)
+        caption_position = _caption_position(caption_bbox, bbox)
         # markdown is a lossy flattening (rowspan/colspan ignored); html keeps
         # the hierarchical structure so downstream consumers can choose.
         markdown = markdown or (_rows_to_markdown(rows) if rows else html)
@@ -329,6 +331,7 @@ def _block_to_region(
             markdown=markdown or None,
             text=markdown or None,
             caption=caption or None,
+            caption_position=caption_position,
         )
         return Region(
             page=page_number,
@@ -441,6 +444,46 @@ def _caption_text(
     return _collect_block_text(para_block, nested_type) or _first_text_field(
         para_block, direct_keys
     )
+
+
+def _caption_bbox(
+    para_block: dict[str, Any],
+    nested_type: str,
+) -> list[float] | None:
+    """Union of all caption sub-block bboxes of ``nested_type``.
+
+    Direct fallback (``"caption"`` as a string field on the para block) has
+    no bbox, so this helper has no ``direct_keys`` analogue to ``_caption_text``.
+    """
+    boxes: list[list[float]] = []
+    for block in para_block.get("blocks", []):
+        if block.get("type") != nested_type:
+            continue
+        bbox = _to_bbox(block.get("bbox"))
+        if bbox is not None:
+            boxes.append(bbox)
+    if not boxes:
+        return None
+    return [
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    ]
+
+
+def _caption_position(
+    caption_bbox: list[float] | None,
+    parent_bbox: list[float] | None,
+) -> Literal["above", "below"] | None:
+    """PDF coordinates: y grows downward, so y0 is top, y1 is bottom."""
+    if caption_bbox is None or parent_bbox is None:
+        return None
+    if caption_bbox[3] <= parent_bbox[1]:
+        return "above"
+    if caption_bbox[1] >= parent_bbox[3]:
+        return "below"
+    return None
 
 
 def _block_to_text(block: dict[str, Any]) -> str:
