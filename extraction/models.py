@@ -6,6 +6,7 @@ and the intermediate segmentation regions.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -30,9 +31,9 @@ class ElementContent(BaseModel):
     image_path: str | None = None
     description: str | None = None
     caption: str | None = None
-    # "above" | "below" | None — None when no caption sub-block was detected,
-    # when its bbox is missing, or when caption and parent overlap on the y-axis.
-    caption_position: str | None = None
+    # None when no caption sub-block was detected, when its bbox is missing,
+    # or when caption and parent overlap on the y-axis.
+    caption_position: Literal["above", "below"] | None = None
 
 
 class Element(BaseModel):

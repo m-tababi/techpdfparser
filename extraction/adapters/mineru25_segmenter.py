@@ -22,7 +22,7 @@ import json
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from ..models import ElementContent, ElementType, Region
 from ..registry import (
@@ -475,7 +475,7 @@ def _caption_bbox(
 def _caption_position(
     caption_bbox: list[float] | None,
     parent_bbox: list[float] | None,
-) -> str | None:
+) -> Literal["above", "below"] | None:
     """PDF coordinates: y grows downward, so y0 is top, y1 is bottom."""
     if caption_bbox is None or parent_bbox is None:
         return None
