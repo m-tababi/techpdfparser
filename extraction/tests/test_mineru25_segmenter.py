@@ -339,6 +339,17 @@ def test_table_with_multiple_marker_cells_preserves_order() -> None:
     ]
 
 
+def test_table_marker_handles_leading_whitespace_before_value() -> None:
+    # Pretty-printed HTML with newline / spaces before the numeric text
+    # should still emit the marker — _cell_markers_from_html strips() the
+    # leading text node before applying the numeric regex.
+    html = "<table><tr><td>\n   4.2<sup>a</sup></td></tr></table>"
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers == [CellMarker(value="4.2", marker="a")]
+
+
 def test_table_marker_takes_first_sup_when_cell_has_multiple_sups() -> None:
     html = "<table><tr><td>4.2<sup>a</sup><sup>b</sup></td></tr></table>"
     region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
