@@ -200,7 +200,8 @@ Element
   section_path, confidence, extractor, content
 
 ElementContent
-  text, markdown, html, latex, image_path, description, caption
+  text, markdown, html, latex, image_path, description, caption,
+  caption_position, footnotes
 
 ContentList
   doc_id, source_file, total_pages, schema_version,
