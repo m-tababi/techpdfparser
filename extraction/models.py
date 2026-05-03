@@ -27,6 +27,13 @@ class TableFootnote(BaseModel):
     text: str
 
 
+class CellMarker(BaseModel):
+    """A numeric value paired with a superscript marker found in a table cell."""
+
+    value: str
+    marker: str
+
+
 class ElementContent(BaseModel):
     """Content fields vary by element type. All are optional; presence depends on type."""
 
@@ -43,6 +50,9 @@ class ElementContent(BaseModel):
     # Tabellen-Fußnoten als strukturierte Liste; None wenn keine Footnote
     # sub-blocks vorliegen oder alle Texte leer waren.
     footnotes: list[TableFootnote] | None = None
+    # Pro `<td>`/`<th>` mit numerischem Wert + `<sup>`-Marker; None wenn das
+    # HTML keine sup-Tags hat oder kein cell strukturell passt.
+    markers: list[CellMarker] | None = None
 
 
 class Element(BaseModel):

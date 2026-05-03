@@ -201,7 +201,7 @@ Element
 
 ElementContent
   text, markdown, html, latex, image_path, description, caption,
-  caption_position, footnotes
+  caption_position, footnotes, markers
 
 ContentList
   doc_id, source_file, total_pages, schema_version,
