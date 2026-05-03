@@ -24,7 +24,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Callable, Literal
 
-from ..models import ElementContent, ElementType, Region
+from ..models import ElementContent, ElementType, Region, TableFootnote
 from ..registry import (
     register_formula_extractor,
     register_segmenter,
@@ -49,6 +49,7 @@ _BLOCK_CHART_BODY = "chart_body"
 _BLOCK_IMAGE_CAPTION = "image_caption"
 _BLOCK_TABLE_CAPTION = "table_caption"
 _BLOCK_CHART_CAPTION = "chart_caption"
+_BLOCK_TABLE_FOOTNOTE = "table_footnote"
 
 _SPAN_TEXT = "text"
 _SPAN_INLINE_EQUATION = "inline_equation"
@@ -321,6 +322,7 @@ def _block_to_region(
         caption = _caption_text(block, _BLOCK_TABLE_CAPTION, ("caption", "table_caption"))
         caption_bbox = _caption_bbox(block, _BLOCK_TABLE_CAPTION)
         caption_position = _caption_position(caption_bbox, bbox)
+        footnotes = _footnote_texts(block, _BLOCK_TABLE_FOOTNOTE)
         # markdown is a lossy flattening (rowspan/colspan ignored); html keeps
         # the hierarchical structure so downstream consumers can choose.
         markdown = markdown or (_rows_to_markdown(rows) if rows else html)
@@ -332,6 +334,7 @@ def _block_to_region(
             text=markdown or None,
             caption=caption or None,
             caption_position=caption_position,
+            footnotes=footnotes or None,
         )
         return Region(
             page=page_number,
@@ -444,6 +447,25 @@ def _caption_text(
     return _collect_block_text(para_block, nested_type) or _first_text_field(
         para_block, direct_keys
     )
+
+
+def _footnote_texts(
+    para_block: dict[str, Any],
+    nested_type: str,
+) -> list[TableFootnote]:
+    """Collect non-empty footnote texts from sub-blocks of ``nested_type``.
+
+    No direct-key fallback: MinerU emits footnotes only as nested sub-blocks,
+    never as a string field on the parent para_block.
+    """
+    items: list[TableFootnote] = []
+    for block in para_block.get("blocks", []):
+        if block.get("type") != nested_type:
+            continue
+        text = _lines_to_text(block.get("lines", []))
+        if text:
+            items.append(TableFootnote(text=text))
+    return items
 
 
 def _caption_bbox(
