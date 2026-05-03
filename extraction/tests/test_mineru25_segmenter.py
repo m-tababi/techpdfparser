@@ -13,7 +13,7 @@ from extraction.adapters.mineru25_segmenter import (
     _block_to_region,
     _confidence_for_block,
 )
-from extraction.models import ElementType, TableFootnote
+from extraction.models import CellMarker, ElementType, TableFootnote
 from extraction.registry import (
     get_formula_extractor,
     get_segmenter,
@@ -273,6 +273,89 @@ def test_table_with_empty_footnote_text_drops_field() -> None:
     assert region is not None
     assert region.content is not None
     assert region.content.footnotes is None
+
+
+def _table_block_with_html(html: str) -> dict[str, Any]:
+    return {
+        "bbox": [0.0, 0.0, 100.0, 100.0],
+        "type": "table",
+        "score": 0.9,
+        "blocks": [
+            {
+                "type": "table_body",
+                "bbox": [0.0, 0.0, 100.0, 100.0],
+                "lines": [{"spans": [{"type": "table", "html": html, "image_path": ""}]}],
+            }
+        ],
+    }
+
+
+def test_table_with_numeric_sup_marker_emits_cell_marker() -> None:
+    html = "<table><tr><td>4.2<sup>a</sup></td></tr></table>"
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers == [CellMarker(value="4.2", marker="a")]
+
+
+def test_table_marker_skips_cell_with_non_numeric_text_before_sup() -> None:
+    html = "<table><tr><td>Total<sup>a</sup></td></tr></table>"
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers is None
+
+
+def test_table_marker_skips_mixed_alphanumeric_text_before_sup() -> None:
+    html = "<table><tr><td>n=12 <sup>a</sup></td></tr></table>"
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers is None
+
+
+def test_table_with_no_sup_anywhere_keeps_markers_none() -> None:
+    html = "<table><tr><td>4.2</td><td>1.5</td></tr></table>"
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers is None
+
+
+def test_table_with_multiple_marker_cells_preserves_order() -> None:
+    html = (
+        "<table>"
+        "<tr><td>0.236<sup>+</sup></td><td>0.924<sup>+</sup></td></tr>"
+        "<tr><td>0.044<sup>+</sup></td></tr>"
+        "</table>"
+    )
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers == [
+        CellMarker(value="0.236", marker="+"),
+        CellMarker(value="0.924", marker="+"),
+        CellMarker(value="0.044", marker="+"),
+    ]
+
+
+def test_table_marker_handles_leading_whitespace_before_value() -> None:
+    # Pretty-printed HTML with newline / spaces before the numeric text
+    # should still emit the marker — _cell_markers_from_html strips() the
+    # leading text node before applying the numeric regex.
+    html = "<table><tr><td>\n   4.2<sup>a</sup></td></tr></table>"
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers == [CellMarker(value="4.2", marker="a")]
+
+
+def test_table_marker_takes_first_sup_when_cell_has_multiple_sups() -> None:
+    html = "<table><tr><td>4.2<sup>a</sup><sup>b</sup></td></tr></table>"
+    region = _block_to_region(_table_block_with_html(html), page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.markers == [CellMarker(value="4.2", marker="a")]
 
 
 def test_table_block_keeps_raw_html_with_rowspan_colspan() -> None:

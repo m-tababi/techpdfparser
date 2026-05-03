@@ -19,12 +19,13 @@ currently depends on ``mineru>=3.1``.
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Callable, Literal
 
-from ..models import ElementContent, ElementType, Region, TableFootnote
+from ..models import CellMarker, ElementContent, ElementType, Region, TableFootnote
 from ..registry import (
     register_formula_extractor,
     register_segmenter,
@@ -323,6 +324,7 @@ def _block_to_region(
         caption_bbox = _caption_bbox(block, _BLOCK_TABLE_CAPTION)
         caption_position = _caption_position(caption_bbox, bbox)
         footnotes = _footnote_texts(block, _BLOCK_TABLE_FOOTNOTE)
+        markers = _cell_markers_from_html(html)
         # markdown is a lossy flattening (rowspan/colspan ignored); html keeps
         # the hierarchical structure so downstream consumers can choose.
         markdown = markdown or (_rows_to_markdown(rows) if rows else html)
@@ -335,6 +337,7 @@ def _block_to_region(
             caption=caption or None,
             caption_position=caption_position,
             footnotes=footnotes or None,
+            markers=markers or None,
         )
         return Region(
             page=page_number,
@@ -568,6 +571,44 @@ def _lines_to_text(lines: list[dict[str, Any]]) -> str:
 
 def _looks_like_html(text: str) -> bool:
     return text.lstrip().startswith("<")
+
+
+_NUMERIC_CELL_RE = re.compile(r"^[\d.,]+$")
+
+
+def _cell_markers_from_html(html: str) -> list[CellMarker]:
+    """Extract `{value, marker}` pairs from `<td>`/`<th>` cells.
+
+    A cell qualifies when its first text node (stripped) matches a strictly
+    numeric pattern and is followed by a `<sup>` tag. Mirrors the lazy bs4
+    import used by ``_html_to_rows`` so CPU-only setups don't pay the cost
+    when the table HTML is empty.
+    """
+    if not html.strip():
+        return []
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return []
+
+    soup = BeautifulSoup(html, "html.parser")
+    markers: list[CellMarker] = []
+    for cell in soup.find_all(["td", "th"]):
+        sup = cell.find("sup")
+        if sup is None:
+            continue
+        # First child of the cell must be a string node with numeric content.
+        contents = list(cell.contents)
+        if not contents or not isinstance(contents[0], str):
+            continue
+        value = contents[0].strip()
+        if not _NUMERIC_CELL_RE.match(value):
+            continue
+        marker_text = sup.get_text(strip=True)
+        if not marker_text:
+            continue
+        markers.append(CellMarker(value=value, marker=marker_text))
+    return markers
 
 
 def _html_to_rows(html: str) -> list[list[str]]:

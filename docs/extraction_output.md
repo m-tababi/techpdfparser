@@ -91,7 +91,8 @@ Jeder Sidecar und jeder Eintrag in `content_list.json:elements` folgt diesem Sch
     "description": "...",
     "caption": "...",
     "caption_position": "above | below",
-    "footnotes": [{"text": "..."}]
+    "footnotes": [{"text": "..."}],
+    "markers": [{"value": "4.2", "marker": "a"}]
   }
 }
 ```
@@ -105,7 +106,7 @@ Optionale Felder in `content` — welches gesetzt ist, hängt vom `type` ab:
 |---------------------|----------------------------------------------------------|
 | text                | `text`                                                   |
 | heading             | `text`                                                   |
-| table               | `image_path`, idealerweise `markdown`, `html`, `text`, ggf. `caption`, ggf. `caption_position`, ggf. `footnotes` |
+| table               | `image_path`, idealerweise `markdown`, `html`, `text`, ggf. `caption`, ggf. `caption_position`, ggf. `footnotes`, ggf. `markers` |
 | formula             | `image_path`, idealerweise `latex`, `text`               |
 | figure              | `description`, `image_path`, ggf. `caption`              |
 | diagram             | `description`, `image_path`, ggf. `caption`              |
@@ -202,6 +203,7 @@ Datenquellen pro Feld:
 | `caption`                                  | Segmenter (Layout)      |
 | `caption_position` (nur `table`)           | Segmenter (Layout)      |
 | `footnotes` (nur `table`)                  | Segmenter (Layout)      |
+| `markers` (nur `table`)                    | Segmenter (Layout, aus `<sup>` im HTML) |
 | `image_path`                               | Pipeline (aus dem Crop) |
 | `text`                                     | `text_extractor`        |
 | `markdown`, `html`                         | `table_extractor`       |
@@ -220,10 +222,11 @@ Ablauf pro Region im staged Workflow:
 4. `describe-figures` behandelt Figure, Diagram und Technical Drawing analog
    mit dem konfigurierten `figure_descriptor`.
 5. `caption` aus dem Segmenter bleibt erhalten und wird auf den Extractor-Output
-   gelegt. `caption_position` und `footnotes` (beide nur `table`, abgeleitet
-   aus den `table_caption`/`table_footnote`-Sub-Blöcken des Segmenters)
-   bleiben nur unter Tool-Match (Passthrough) erhalten — bei abweichendem
-   `table_extractor` propagiert die Stage sie heute nicht weiter (siehe Backlog).
+   gelegt. `caption_position`, `footnotes` und `markers` (alle drei nur `table`,
+   abgeleitet aus den `table_caption`/`table_footnote`-Sub-Blöcken des Segmenters
+   bzw. aus `<sup>`-Tags im Tabellen-HTML) bleiben nur unter Tool-Match
+   (Passthrough) erhalten — bei abweichendem `table_extractor` propagiert die
+   Stage sie heute nicht weiter (siehe Backlog).
 6. Ein Role-Tool-Output mit leerem Pflichtfeld wird gedroppt, wenn keine
    visuelle Evidenz existiert. Tabellen und Formeln dürfen als Crop-only
    Fallback persistieren, solange ein `image_path` vorhanden ist; Text und
