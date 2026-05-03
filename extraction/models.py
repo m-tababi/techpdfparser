@@ -21,6 +21,12 @@ class ElementType(str, Enum):
     TECHNICAL_DRAWING = "technical_drawing"
 
 
+class TableFootnote(BaseModel):
+    """A single footnote attached to a table element."""
+
+    text: str
+
+
 class ElementContent(BaseModel):
     """Content fields vary by element type. All are optional; presence depends on type."""
 
@@ -34,6 +40,9 @@ class ElementContent(BaseModel):
     # None when no caption sub-block was detected, when its bbox is missing,
     # or when caption and parent overlap on the y-axis.
     caption_position: Literal["above", "below"] | None = None
+    # Tabellen-Fußnoten als strukturierte Liste; None wenn keine Footnote
+    # sub-blocks vorliegen oder alle Texte leer waren.
+    footnotes: list[TableFootnote] | None = None
 
 
 class Element(BaseModel):

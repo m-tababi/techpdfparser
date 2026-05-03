@@ -13,7 +13,7 @@ from extraction.adapters.mineru25_segmenter import (
     _block_to_region,
     _confidence_for_block,
 )
-from extraction.models import ElementType
+from extraction.models import ElementType, TableFootnote
 from extraction.registry import (
     get_formula_extractor,
     get_segmenter,
@@ -198,6 +198,81 @@ def test_table_with_multiple_captions_all_above_sets_caption_position_above() ->
     assert region is not None
     assert region.content is not None
     assert region.content.caption_position == "above"
+
+
+def _table_block_with_footnotes(footnote_texts: list[str]) -> dict[str, Any]:
+    body_block = {
+        "type": "table_body",
+        "bbox": [50.0, 200.0, 300.0, 400.0],
+        "lines": [
+            {"spans": [{"type": "table", "html": "<table><tr><td>x</td></tr></table>"}]}
+        ],
+    }
+    footnote_blocks = [
+        {
+            "type": "table_footnote",
+            "bbox": [50.0, 410.0 + 20.0 * i, 300.0, 425.0 + 20.0 * i],
+            "lines": [{"spans": [{"type": "text", "content": text}]}],
+        }
+        for i, text in enumerate(footnote_texts)
+    ]
+    return {
+        "bbox": [50.0, 200.0, 300.0, 500.0],
+        "type": "table",
+        "score": 0.9,
+        "blocks": [body_block, *footnote_blocks],
+    }
+
+
+def test_table_with_single_footnote_sets_footnotes_list() -> None:
+    block = _table_block_with_footnotes(["* Values are in mg/L."])
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.footnotes == [TableFootnote(text="* Values are in mg/L.")]
+
+
+def test_table_with_multiple_footnotes_preserves_order() -> None:
+    block = _table_block_with_footnotes([
+        "a) First note",
+        "b) Second note",
+    ])
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.footnotes == [
+        TableFootnote(text="a) First note"),
+        TableFootnote(text="b) Second note"),
+    ]
+
+
+def test_table_without_footnote_block_keeps_footnotes_none() -> None:
+    block = {
+        "bbox": [0.0, 0.0, 100.0, 100.0],
+        "type": "table",
+        "score": 0.95,
+        "blocks": [
+            {
+                "type": "table_body",
+                "bbox": [0.0, 0.0, 100.0, 100.0],
+                "lines": [
+                    {"spans": [{"type": "table", "html": "<table><tr><td>x</td></tr></table>"}]}
+                ],
+            }
+        ],
+    }
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.footnotes is None
+
+
+def test_table_with_empty_footnote_text_drops_field() -> None:
+    block = _table_block_with_footnotes(["   "])
+    region = _block_to_region(block, page_number=0, layout_dets=[])
+    assert region is not None
+    assert region.content is not None
+    assert region.content.footnotes is None
 
 
 def test_table_block_keeps_raw_html_with_rowspan_colspan() -> None:
